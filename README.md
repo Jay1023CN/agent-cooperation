@@ -1,51 +1,144 @@
-# Agent Cooperation
+<p align="center">
+  <img src="docs/images/hero.svg" alt="Agent Cooperation：你和伙伴，几台电脑，一张调度台。" width="100%">
+</p>
 
-**把分散在不同电脑和客户端里的 AI 代理，组织成一支能一起做项目的队伍。**
+<p align="center">
+  <a href="https://github.com/Jay1023CN/agent-cooperation/releases"><img alt="Release" src="https://img.shields.io/github/v/release/Jay1023CN/agent-cooperation?style=flat-square&color=1f3a5f"></a>
+  <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-1f3a5f?style=flat-square">
+  <a href="LICENSE"><img alt="Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-1f3a5f?style=flat-square"></a>
+  <img alt="不需要 API Key" src="https://img.shields.io/badge/API%20Key-%E4%B8%8D%E9%9C%80%E8%A6%81-2e7d4f?style=flat-square">
+  <img alt="自托管" src="https://img.shields.io/badge/%E9%83%A8%E7%BD%B2-%E8%87%AA%E6%89%98%E7%AE%A1-0b7a8c?style=flat-square">
+</p>
 
-你只需要在工作台说明目标：做一个网站、研究一个问题，或交付一份设计。负责人拆解任务，再交给合适的成员；代码、文档和其他成果都有明确的交接记录，完成后还能安排另一名成员检查。
+<p align="center">
+  <a href="#它怎么工作">它怎么工作</a> ·
+  <a href="#快速开始">快速开始</a> ·
+  <a href="#能接入哪些客户端">客户端</a> ·
+  <a href="#现在做到哪了">进度</a> ·
+  <a href="#项目文档">文档</a>
+</p>
 
-Agent Cooperation 适合同时使用多台电脑、多个 AI 客户端的个人和小团队。它以 [Multica](https://github.com/multica-ai/multica) 管理项目和任务，以 PAL Agent Link 连接本机代理，让现有工具加入协作。
+---
 
-![Agent Cooperation 协作流程](docs/images/agent-cooperation-workflow.png)
+你手上有 Claude Code、Codex、Qoder、Antigravity、WorkBuddy……分散在家里和身边的几台 Mac、Windows 上。每个都能干活，但它们互相不认识：你得自己拆任务、自己复制粘贴上下文、自己记住谁做到哪了、自己检查它说的“做完了”是不是真的做完了。
 
-## 能帮你做什么
+**Agent Cooperation 把这件事交给一张调度台。** 你和伙伴在团队频道里说目标，负责人把它拆成带验收条件的任务，分给在线电脑上合适的 AI 成员；每个任务在自己的 Git 分支里完成，再由**另一位成员**对照需求和证据独立验收，没通过就退回修订。全程用的是你们已经登录的客户端订阅，不需要任何模型 API Key。
 
-- **把大目标拆成可交付的任务**：明确负责人、执行成员、依赖和验收要求，减少反复转述。
-- **让不同电脑一起工作**：每台电脑连接自己的运行环境；代码通过独立分支和 Git 提交交接。
-- **接入已有客户端**：PAL Agent Link 提供 Qoder、Qoder CN、Antigravity、OpenCode 和 WorkBuddy 等本机连接方式，也保留 PAL 的 `clink` 工具。
-- **看见任务和成果**：工作台组织项目、成员和任务；交接时记录工作目录、提交及检查结果，方便接手和复核。
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/arena-preview-dark.png">
+  <img alt="调度台界面：任务管线、等你授权提醒、团队频道和各台电脑的执行位" src="docs/images/arena-preview-light.png">
+</picture>
 
-![PAL Arena 浅色界面预览](docs/images/arena-preview-light.png)
+<sub>示例数据截图。顶部管线条按状态显示全部任务；“等你授权”一栏集中列出只能由人来放行的操作；右栏是已接入电脑的在线状态和执行位占用。示例里是四台，实际接几台都行，随时增减。</sub>
 
-[查看深色界面](docs/images/arena-preview-dark.png)
+## 它怎么工作
 
-## 现在可以试什么
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/flow-dark.svg">
+  <img alt="流程：你和伙伴提出需求，负责人拆分任务，分派到已接入的电脑并行执行，独立验收，没通过退回修订最多三次，通过后负责人汇总交付" src="docs/images/flow-light.svg" width="100%">
+</picture>
 
-项目正在开发中。PAL Agent Link 已提供客户端连接、自检和 Multica 的 MCP 配置生成；PAL Arena 是独立的工作台原型。最新的桌面任务交接原型支持同机领取、提交候选结果和 Git 交付检查，并可选接入跨电脑任务占用登记。
+1. **说目标。** 团队频道你和伙伴都能看到；想先自己理清楚，就私聊负责人，私聊不会改动共享需求。
+2. **定需求清单。** 每一条都要能核对，清单有版本号。需求一改，旧版本的验收结果就作废，要重新核对。
+3. **拆任务、派任务。** 负责人给每个任务写清能力、依赖、文件范围和验收条件。调度先看硬条件（在线、角色、能力、并发、代码在哪台机器），再按“平衡 / 质量优先 / 省额度”排序，**每次分派都写明理由**。
+4. **各台电脑执行。** 执行机主动连接中心领取任务，在独立目录和 `arena/<task>/<attempt>` 分支里干活，交回提交 SHA、日志和产物。依赖任务读的是上一步确定的提交，而不是“大概是最新的代码”。
+5. **独立验收。** 验收成员和执行成员不能是同一个；没有结构化结论和证据，就不算通过。不通过退回修订，自动修订最多三次，之后停下来等人处理。
+6. **汇总交付。** 全部通过后负责人整合成果，交付必须对齐当前需求版本。合并、部署按项目策略来，比赛的最终提交仍由你们自己完成。
 
-完整的多机自动协作、WorkBuddy 与 Multica 的状态回写，以及真实设备联调仍在开发。交接原型的使用条件和当前边界见[桌面交接说明](docs/desktop-handoff.md)及[跨电脑占用记录](docs/coordination.md)。
+## 和“多开几个 AI 窗口”有什么不同
+
+| | 手动多开 | Agent Cooperation |
+| --- | --- | --- |
+| 谁来拆任务 | 你 | 负责人，按需求清单拆，任务带验收条件 |
+| 谁做完了 | 靠它自己说 | 看提交、日志、产物，再由另一位成员验收 |
+| 断线或超时 | 不知道它到底执行没有 | 标记为“结果未知”，**绝不自动重发写操作**，等你确认现场 |
+| 代码交接 | 复制粘贴 | 每个任务一条分支，按提交 SHA 接力 |
+| 用量 | 各算各的 | 用已登录的订阅；额度查不到就显示“未知”，不假装知道 |
+| 需求变了 | 大家各记一版 | 需求有版本，旧验收自动失效 |
+
+还有几条是刻意的：
+
+- **不假装在线。** 电脑在线、客户端装好了、订阅账号能用，是三个不同状态，界面分开显示。没接入的机器显示空状态，不拿示例数据充数。
+- **记忆要人点头。** AI 提出的“记住这一点”先进待确认，成员批准后才会带进后续任务；每次运行都固定它用的那一版记忆。
+- **私聊就是私聊。** 个人对话、它的任务、日志和产物只给本人看，不能改共享需求，也不能确认共享交付。
 
 ## 快速开始
 
-需要 Python 3.10+，并先登录你准备使用的客户端：
+需要 Python 3.10+，并在每台电脑上先登录你打算用的客户端（Claude Code、Codex、Qoder 等）。
+
+**1. 在常开的那台电脑上启动中心**（比如 Mac mini）：
 
 ```sh
 git clone https://github.com/Jay1023CN/agent-cooperation.git
 cd agent-cooperation
-git submodule update --init third_party/multica
 python -m pip install .
-python -m agent_link --preflight
-python -m agent_link --multica-config
+pal-arena serve
 ```
 
-自检会检查本机配置与常见命令；最后一条命令生成 MCP 配置。接下来在执行任务的电脑上按 [Multica 接入说明](docs/multica.md)配置代理，先完成一台电脑的连接，再逐步扩展。
+打开 `http://127.0.0.1:8765`，用 `~/.pal-arena/server/owner-token.txt` 里的令牌登录。中心默认只监听本机。
 
-想了解各客户端的连接方式，查看 [PAL Agent Link 说明](docs/agent-link.md)；想了解项目方向和进度，查看[整合方案](docs/multica-integration-plan.md)。
+**2. 让其他电脑连得上。** 没有公网 IP 也没关系：所有电脑加入同一个 Tailscale 网络，然后在中心那台电脑上运行：
+
+```sh
+tailscale serve --bg http://127.0.0.1:8765
+```
+
+**3. 接入执行电脑。** 在调度台的「电脑与成员」里点「连接电脑」，生成这台电脑专用的令牌，勾选本机已安装的客户端，下载 `worker.json`。然后在那台电脑上（Windows PowerShell 用 `$env:ARENA_MACHINE_TOKEN = '...'`）：
+
+```sh
+export ARENA_MACHINE_TOKEN='这台电脑的令牌'
+pal-arena doctor --config worker.json
+pal-arena-worker --config worker.json
+```
+
+`doctor` 只检查安装和本地连接，不会发模型请求，也不代表订阅额度没问题。第一次建议先派一个只读的小任务，确认结果、文件和验收都对得上，再加并发。
+
+只想先看界面：登录页点「不登录，先看示例」，或者访问 `/?demo=1`。完整的安装、校验、升级步骤见 [交付指南](docs/arena-delivery.md)。
+
+## 能接入哪些客户端
+
+| 客户端 | 接入方式 | 现状 |
+| --- | --- | --- |
+| Claude Code / Codex / Gemini | 官方 CLI，每个任务新建会话 | 可用；桌面版装了不等于 CLI 装了 |
+| Qoder / Qoder CN | ACP 新建会话 | 可用；不接管 IDE 里已打开的聊天 |
+| Antigravity | 本机桌面 RPC | 可用；可新建会话，也可接续指定的已有会话 |
+| OpenCode | 本机 HTTP 服务 | 可用 |
+| WorkBuddy | 桌面 MCP，由已登录的桌面会话主动领取任务 | 原型；真实客户端待实机验证 |
+| GLM 等模型 | 由承载它的客户端选择 | 模型名本身不是可执行程序 |
+| Blender | 派给装了 Blender 的电脑，产出 `.blend` 和导出文件 | 专用适配待联调 |
+
+另外保留了上游 PAL 的 `clink` 工具和 [PAL Agent Link](docs/agent-link.md)：可以在任意 MCP 客户端里直接调用本机其他代理，也能为 [Multica](https://github.com/multica-ai/multica) 生成 MCP 配置。
+
+## 现在做到哪了
+
+- [x] 调度台网页：项目、需求版本、团队频道 / 私聊、任务看板、验收、成果、记忆、运行记录，浅色深色跟随系统
+- [x] 中心服务：令牌登录、成员与电脑独立凭据、SQLite 存储、5 GB 暂存预算与清理、一致性备份
+- [x] 调度：硬条件筛选 + 策略排序 + 分派理由；依赖等前置验收通过才启动
+- [x] Git 交接：独立工作目录与分支、提交 SHA 证据、可选推送到 GitHub、发布器整合已验收提交
+- [x] 独立验收与最多三次自动修订；结果未知时停止回写，不自动重复执行
+- [x] 桌面交接原型与跨电脑任务占用登记
+- [ ] 多台实机、真实订阅下的端到端联调
+- [ ] WorkBuddy 与 Multica 的状态回写
+- [ ] Blender 专用适配和可打开产物的自动检查
+
+测试用临时 Git 仓库、假 CLI 和协议夹具跑，不消耗真实订阅；它们替代不了实机验收，上面没打勾的项就是还没在真实设备上验证过。
+
+## 项目结构
+
+```
+arena/         调度台中心服务：API、调度、存储、执行端 worker、维护与发布
+frontend/      调度台网页源码（Vite + 原生 JS），构建到 arena/static/
+agent_link/    PAL Agent Link：本机客户端适配、桌面交接、跨电脑占用登记
+clink/ tools/  上游 PAL MCP 的 CLI 桥接与多模型工具
+docs/          说明文档
+```
+
+改界面只需要动 `frontend/`，见 [前端说明](frontend/README.md)。
 
 ## 项目文档
 
-[客户端接入评估](docs/arena-chinese-clients.md) · [模型分配](docs/multica-model-routing.md) · [记忆与代码交接](docs/arena-routing-memory.md) · [更新记录](CHANGELOG.md)
+[调度台安装与运行](docs/arena.md) · [产品规格](docs/arena-product.md) · [交付与升级](docs/arena-delivery.md) · [维护与备份](docs/arena-maintenance.md) · [模型分配、记忆与代码交接](docs/arena-routing-memory.md) · [桌面交接](docs/desktop-handoff.md) · [跨电脑占用记录](docs/coordination.md) · [Agent Link](docs/agent-link.md) · [Multica 接入](docs/multica.md) · [整合方案](docs/multica-integration-plan.md) · [更新记录](CHANGELOG.md)
 
 ## 来源与许可
 
-本项目基于 [PAL MCP Server](https://github.com/BeehiveInnovations/pal-mcp-server)，遵循 [Apache-2.0 许可证](LICENSE)。[Multica](https://github.com/multica-ai/multica) 以子模块引入，使用其自身的 [Multica License](https://github.com/multica-ai/multica/blob/8ffcc88/LICENSE)。
+基于 [PAL MCP Server](https://github.com/BeehiveInnovations/pal-mcp-server)，遵循 [Apache-2.0](LICENSE)。[Multica](https://github.com/multica-ai/multica) 以子模块引入，使用其自身的 [Multica License](https://github.com/multica-ai/multica/blob/8ffcc88/LICENSE)。
