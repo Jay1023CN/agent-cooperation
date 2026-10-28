@@ -44,14 +44,17 @@ export function createProjectDialogs({
         '',
       )}</select><small>选了成员后，任务只会派到已绑定该成员 GitHub 的电脑；提交作者是这位成员，提交信息里注明是哪个 AI 成员、哪台电脑做的。</small></div>${
       people.length
-        ? `<details class="detail-section"><summary>在执行电脑上绑定 GitHub</summary>${people
+        ? `<details class="detail-section"><summary>谁已经连接了 GitHub</summary>${people
             .map((person) => {
               const where = bound(person.id);
-              return `<p><strong>${e(person.name)}</strong> · ${where.length ? `已绑定：${e(where.join('、'))}` : '还没有电脑绑定'}</p><pre>pal-arena github login --member ${e(person.id)}</pre>`;
+              const web = person.github?.connected
+                ? `已用 GitHub ${e(person.github.github_login)} 登录，任何电脑都能替他推送`
+                : '';
+              return `<p><strong>${e(person.name)}</strong> · ${web || (where.length ? `已在本机绑定：${e(where.join('、'))}` : '还没有连接 GitHub')}</p>${web ? '' : `<pre>pal-arena github login --member ${e(person.id)}</pre>`}`;
             })
             .join(
               '',
-            )}<p class="muted small">在要替这位成员推送代码的每台电脑上运行一次，浏览器里授权 GitHub 后重启执行端。令牌只保存在那台电脑的 GitHub CLI 里。</p></details>`
+            )}<p class="muted small">最省事：配置好「GitHub 登录设置」后，成员在网页上点「连接 GitHub」一次就行。没有配置时，也可以在要推送代码的每台电脑上运行上面的命令。</p></details>`
         : ''
     }`;
   }

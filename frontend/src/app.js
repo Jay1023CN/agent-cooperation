@@ -67,6 +67,7 @@ let memories = [];
 let memoryLoadSerial = 0;
 let unreadDrafts = new Map();
 let networkAddress = null;
+let githubEnabled = false;
 
 function toast(message, isError = false) {
   clearTimeout(toastTimer);
@@ -435,9 +436,14 @@ function openInvite(kind = 'member') {
   openModal(
     '让伙伴和电脑加入',
     '成员令牌和电脑令牌互相独立。',
-    `<div class="field"><label for="f-invite-kind">连接类型</label><select name="kind" id="f-invite-kind"><option value="member" ${kind === 'member' ? 'selected' : ''}>伙伴 · 加入共享工作台</option><option value="machine" ${kind === 'machine' ? 'selected' : ''}>电脑 · 提供执行能力</option></select></div><div class="field"><label for="f-invite-name">显示名称</label><input id="f-invite-name" name="name" required maxlength="100" placeholder="伙伴的名字，或这台电脑的名字"></div><div class="notice">中心那台电脑没有公网 IP 时，让所有电脑加入同一个 Tailscale 网络。执行端主动连接中心，不需要开放路由器端口。</div>${modalActions('生成专属令牌')}`,
+    `<div class="field"><label for="f-invite-kind">连接类型</label><select name="kind" id="f-invite-kind"><option value="member" ${kind === 'member' ? 'selected' : ''}>伙伴 · 加入共享工作台</option><option value="machine" ${kind === 'machine' ? 'selected' : ''}>电脑 · 提供执行能力</option></select></div><div class="field"><label for="f-invite-name">显示名称</label><input id="f-invite-name" name="name" required maxlength="100" placeholder="伙伴的名字，或这台电脑的名字"></div><div class="field" data-member-only ${kind === 'member' ? '' : 'hidden'}><label for="f-invite-github">伙伴的 GitHub 用户名（可选）</label><input id="f-invite-github" name="github_login" maxlength="39" pattern="[A-Za-z0-9-]*" placeholder="例如 octocat"><small>填了以后，伙伴可以直接点「用 GitHub 登录」进来，不用粘贴令牌；需要先在「GitHub 登录设置」里配置好。</small></div><div class="notice">中心那台电脑没有公网 IP 时，让所有电脑加入同一个 Tailscale 网络。执行端主动连接中心，不需要开放路由器端口。</div>${modalActions('生成专属令牌')}`,
     async (form) => {
-      const invite = await post('/api/invites', { name: form.get('name').trim(), kind: form.get('kind') });
+      const kindValue = form.get('kind');
+      const invite = await post('/api/invites', {
+        name: form.get('name').trim(),
+        kind: kindValue,
+        github_login: kindValue === 'member' ? String(form.get('github_login') || '').trim() : '',
+      });
       renderInviteResult(invite);
     },
   );
@@ -525,6 +531,37 @@ function openMemoryEditor(id) {
     },
   );
 }
+function githubLabel(item) {
+  if (item.kind !== 'member' || !item.github) return '';
+  return item.github.connected
+    ? ` · GitHub ${e(item.github.github_login)}`
+    : ` · 等待 ${e(item.github.github_login)} 用 GitHub 登录`;
+}
+async function openGitHubApp() {
+  if (!editable()) return;
+  const settings = await api('/api/github/app');
+  const callbacks = [settings.callback_url];
+  if (networkAddress?.url) callbacks.push(`${networkAddress.url}/api/github/callback`);
+  openModal(
+    'GitHub 登录设置',
+    '建一个只属于你们的 GitHub App，成员就能用 GitHub 登录，任务也能用他们的账号推送。',
+    `<ol class="setup-steps"><li><strong>新建 GitHub App</strong><p>打开 <a href="https://github.com/settings/apps/new" target="_blank" rel="noopener noreferrer">GitHub → Settings → Developer settings → New GitHub App</a>。名字随便起，Homepage 填工作台地址。</p></li><li><strong>填回调地址</strong><p>Callback URL 填下面的地址（用哪个地址打开工作台就填哪个，可以都填）；勾选 <em>Expire user authorization tokens</em>；Webhook 的 Active 取消勾选。</p><pre>${e([...new Set(callbacks)].join('\n'))}</pre></li><li><strong>只给写代码的权限</strong><p>Repository permissions 里把 <em>Contents</em> 设为 <em>Read and write</em>，其他保持默认。创建后在 App 页面点 <em>Install App</em>，选你们的项目仓库。</p></li><li><strong>把 Client ID 和 Client secret 填到这里</strong><p>在 App 页面复制 Client ID，点 <em>Generate a new client secret</em> 复制密钥。</p></li></ol><div class="form-row"><div class="field"><label for="f-gh-client">Client ID</label><input id="f-gh-client" name="client_id" required value="${e(settings.client_id)}" placeholder="Iv23li…"></div><div class="field"><label for="f-gh-secret">Client secret</label><input id="f-gh-secret" name="client_secret" type="password" autocomplete="off" ${settings.configured ? 'placeholder="已保存；留空不修改"' : 'required'}></div></div><div class="notice">密钥和成员的 GitHub 令牌只保存在中心电脑的 <code>github.sqlite</code> 里，不进备份；令牌 8 小时过期，由中心自动续期，派任务时只把短期令牌交给负责推送的那一步，AI 拿不到。</div>${modalActions(settings.configured ? '更新设置' : '保存并启用')}`,
+    async (form) => {
+      const secret = String(form.get('client_secret') || '');
+      if (!secret && settings.configured) {
+        closeModal();
+        return;
+      }
+      await api('/api/github/app', {
+        method: 'PUT',
+        body: JSON.stringify({ client_id: form.get('client_id').trim(), client_secret: secret }),
+      });
+      githubEnabled = true;
+      closeModal();
+      toast('GitHub 登录已启用。每位成员在「伙伴与令牌」里点「连接 GitHub」一次。');
+    },
+  );
+}
 async function openTeam() {
   if (!editable()) return;
   const result = await api('/api/identities');
@@ -532,7 +569,7 @@ async function openTeam() {
   openModal(
     '伙伴与电脑',
     '管理团队入口和每台电脑的独立凭据。',
-    `<div class="setup-actions"><button class="button primary" type="button" data-action="invite">邀请伙伴</button><button class="button" type="button" data-action="invite-machine">连接执行电脑</button></div><div class="identity-list">${teamIdentities.map((item) => `<div class="identity-row"><span class="agent-icon">${icon(item.kind === 'machine' ? 'monitor' : 'users')}</span><span class="identity-main"><strong>${e(item.name)} ${item.is_self ? '<span class="pill">你</span>' : ''}${item.revoked ? '<span class="pill status-cancelled">已撤销</span>' : ''}</strong><small>${item.kind === 'machine' ? '电脑凭据' : '团队成员'} · ${dateLabel(item.created)}</small></span><span class="identity-actions">${item.is_self || item.kind === 'machine' ? `<button class="button small" type="button" data-action="rotate-identity" data-id="${e(item.id)}">重置令牌</button>` : ''}${!item.revoked ? `<button class="icon-button" type="button" data-action="revoke-identity" data-id="${e(item.id)}" title="撤销访问" aria-label="撤销 ${e(item.name)} 的访问">${icon('trash')}</button>` : ''}</span></div>`).join('')}</div><div class="notice">团队成员共同管理这个空间。撤销访问会使对应令牌与登录会话失效；重置电脑令牌后，需要在该电脑更新环境变量并重启执行端。</div><div class="modal-actions"><button class="button" type="button" data-action="close-modal">关闭</button></div>`,
+    `<div class="setup-actions"><button class="button primary" type="button" data-action="invite">邀请伙伴</button><button class="button" type="button" data-action="invite-machine">连接执行电脑</button><button class="button" type="button" data-action="github-app">${icon('github')} GitHub 登录设置</button></div><div class="identity-list">${teamIdentities.map((item) => `<div class="identity-row"><span class="agent-icon">${icon(item.kind === 'machine' ? 'monitor' : 'users')}</span><span class="identity-main"><strong>${e(item.name)} ${item.is_self ? '<span class="pill">你</span>' : ''}${item.revoked ? '<span class="pill status-cancelled">已撤销</span>' : ''}</strong><small>${item.kind === 'machine' ? '电脑凭据' : '团队成员'} · ${dateLabel(item.created)}${githubLabel(item)}</small></span><span class="identity-actions">${item.is_self && githubEnabled ? (item.github?.connected ? '<button class="button small" type="button" data-action="github-disconnect">断开 GitHub</button>' : '<a class="button small" href="/api/github/connect">连接 GitHub</a>') : ''}${item.is_self || item.kind === 'machine' ? `<button class="button small" type="button" data-action="rotate-identity" data-id="${e(item.id)}">重置令牌</button>` : ''}${!item.revoked ? `<button class="icon-button" type="button" data-action="revoke-identity" data-id="${e(item.id)}" title="撤销访问" aria-label="撤销 ${e(item.name)} 的访问">${icon('trash')}</button>` : ''}</span></div>`).join('')}</div><div class="notice">团队成员共同管理这个空间。撤销访问会使对应令牌与登录会话失效；重置电脑令牌后，需要在该电脑更新环境变量并重启执行端。</div><div class="modal-actions"><button class="button" type="button" data-action="close-modal">关闭</button></div>`,
   );
 }
 function openSetupHelp() {
@@ -809,6 +846,12 @@ document.addEventListener('change', (event) => {
     for (const name of ['auto_merge', 'auto_deploy']) form.querySelector(`[name=${name}]`).checked = false;
   }
 
+  if (event.target.id === 'f-invite-kind') {
+    $$('[data-member-only]').forEach((node) => {
+      node.hidden = event.target.value !== 'member';
+    });
+    return;
+  }
   if (event.target.id === 'theme-select') {
     setTheme(event.target.value);
     return;
@@ -890,6 +933,7 @@ function paletteItems() {
     action('连接一台电脑', 'monitor', '', () => openInvite('machine')),
     action('邀请伙伴', 'users', '', () => openInvite('member')),
     action('伙伴与令牌', 'users', '', () => openTeam()),
+    action('GitHub 登录设置', 'github', '', () => openGitHubApp()),
     action(channel === 'shared' ? '切到私聊负责人' : '切到团队频道', 'chat', '', () =>
       switchChannel(channel === 'shared' ? 'personal' : 'shared'),
     ),
@@ -1022,7 +1066,12 @@ document.addEventListener('click', async (event) => {
     else if (action === 'project') await selectProject(button.dataset.id);
     else if (action === 'palette') palette.open();
     else if (action === 'network-help') openNetworkHelp();
-    else if (action === 'copy-address') {
+    else if (action === 'github-app') await openGitHubApp();
+    else if (action === 'github-disconnect' && editable()) {
+      await api('/api/github/account', { method: 'DELETE' });
+      toast('已断开 GitHub。需要用你的身份推送的任务会排队等待。');
+      await openTeam();
+    } else if (action === 'copy-address') {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(button.dataset.url);
         toast('地址已复制，发给伙伴在浏览器里打开。');
@@ -1188,6 +1237,23 @@ document.addEventListener('click', async (event) => {
     $$('a[href="/"]').forEach((link) => (link.href = '#'));
   }
   const route = readRoute();
+  const params = new URLSearchParams(location.search);
+  const githubError = params.get('github_error');
+  const githubConnected = params.get('github') === 'connected';
+  if (githubError || githubConnected) {
+    params.delete('github_error');
+    params.delete('github');
+    history.replaceState(null, '', location.pathname + (params.size ? `?${params}` : '') + location.hash);
+  }
+  if (!demo) {
+    try {
+      githubEnabled = (await api('/api/github/status')).enabled;
+    } catch {
+      githubEnabled = false;
+    }
+  }
+  $('#github-login').hidden = !githubEnabled;
+  $('#login-divider').hidden = !githubEnabled;
   if (demo) {
     identity = { id: 'demo', name: '你', kind: 'member' };
     showApp();
@@ -1201,6 +1267,10 @@ document.addEventListener('click', async (event) => {
       showLogin();
     }
   }
+  if (githubError) {
+    if (identity) toast(githubError, true);
+    else $('#login-error').textContent = githubError;
+  } else if (githubConnected && identity) toast('已用 GitHub 登录。');
   if (identity) {
     if (route.view) navigate(route.view);
     if (route.taskId && state.tasks.some((task) => task.id === route.taskId)) openTask(route.taskId);

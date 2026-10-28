@@ -39,6 +39,8 @@ class Store:
         self.root.chmod(0o700)
         (self.root / "artifacts").mkdir(exist_ok=True)
         self.quota = quota
+        # Set by the API: identity id -> public GitHub identity held by the center, or None.
+        self.github_lookup = lambda identity_id: None
         self.lock = threading.RLock()
         self.db = sqlite3.connect(self.root / "arena.db", check_same_thread=False)
         self.db.row_factory = sqlite3.Row
@@ -602,6 +604,8 @@ class Store:
             project = self.project(t["project_id"])
             # Commits and pushes under a member's GitHub account can only happen where that member logged in.
             commit_as = project["policy"].get("commit_as") if t["kind"] in ("worker", "leader") else ""
+            # A member signed in with GitHub on the web gets credentials from the center on any computer.
+            center_identity = self.github_lookup(commit_as) if commit_as else None
             # Commit availability is a hard constraint, independent of model quality.
             if t["source_id"]:
                 inputs = [self.task(t["source_id"])["evidence"]]
@@ -625,8 +629,10 @@ class Store:
                     continue
                 if any(e.get("machine_id") != a["machine_id"] for e in local_inputs):
                     continue
-                if commit_as and not any(
-                    item["member_id"] == commit_as for item in json.loads(a["machine_github_members"])
+                if (
+                    commit_as
+                    and not center_identity
+                    and not any(item["member_id"] == commit_as for item in json.loads(a["machine_github_members"]))
                 ):
                     continue
                 if t["capability"] not in json.loads(a["capabilities"]) and t["kind"] in (
@@ -663,8 +669,10 @@ class Store:
                         "等待可读取本地提交的同机成员；跨电脑协作需先同步工作分支到 GitHub。"
                         if local_inputs
                         else (
-                            "项目要求以成员的 GitHub 身份提交；先在执行电脑上运行 pal-arena github login 绑定该成员。"
+                            "项目要求以成员的 GitHub 身份提交；请这位成员在网页上用 GitHub 登录一次，"
+                            "或在执行电脑上运行 pal-arena github login。"
                             if commit_as
+                            and not center_identity
                             and not any(
                                 item["member_id"] == commit_as
                                 for a in candidates
@@ -701,9 +709,12 @@ class Store:
                 "project": self.project(t["project_id"]),
                 "agent": chosen,
                 "commit_identity": (
-                    {key: bound[commit_as][key] for key in ("member_id", "github_id", "github_login")}
-                    if commit_as
-                    else None
+                    {
+                        **{key: bound[commit_as][key] for key in ("member_id", "github_id", "github_login")},
+                        "source": "local",
+                    }
+                    if commit_as and commit_as in bound
+                    else {"member_id": commit_as, **center_identity, "source": "center"} if commit_as else None
                 ),
                 "run_token": token,
                 "agent_token": agent_token,

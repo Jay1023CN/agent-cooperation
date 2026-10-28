@@ -79,7 +79,12 @@ def test_task_waits_for_a_machine_where_the_member_logged_in(arena):
     bound = machine(client, "Bound PC", [{"member_id": member, "github_id": 42, "github_login": "octo-member"}])
     assert client.post("/api/machines/claim", headers=plain, json={}).json() is None
     job = client.post("/api/machines/claim", headers=bound, json={}).json()
-    assert job["commit_identity"] == {"member_id": member, "github_id": 42, "github_login": "octo-member"}
+    assert job["commit_identity"] == {
+        "member_id": member,
+        "github_id": 42,
+        "github_login": "octo-member",
+        "source": "local",
+    }
     assert "machine_github_members" not in job["agent"]
     machines = client.get("/api/state").json()["machines"]
     assert {m["name"]: m["github_members"] for m in machines}["Bound PC"] == [

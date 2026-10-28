@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -48,8 +49,42 @@ def verified_members(config: dict, gh: str = "gh") -> list[dict]:
     return members
 
 
+# Answers Git's credential request from an environment variable, so the token is never written to disk.
+CREDENTIAL_HELPER = (
+    '!f() { test "$1" = get && printf "username=%s\\npassword=%s\\n" "$ARENA_GITHUB_LOGIN" "$ARENA_GITHUB_TOKEN"; }; f'
+)
+
+
+def center_environment(expected: dict) -> tuple[dict[str, str], dict]:
+    """Git environment from a member identity and short-lived token issued by the center for this task."""
+    if expected.get("credential_error"):
+        raise GitHubIdentityError(expected["credential_error"])
+    if not expected.get("git_email") or not expected.get("git_name"):
+        raise GitHubIdentityError("The center did not send the member's Git identity")
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.upper().startswith("GIT_")
+        and key not in {"GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN"}
+    }
+    env.update(author_environment(expected), GIT_TERMINAL_PROMPT="0", GIT_CONFIG_COUNT="1")
+    env.update(GIT_CONFIG_KEY_0="credential.helper", GIT_CONFIG_VALUE_0="")
+    if expected.get("token"):
+        env.update(
+            GIT_CONFIG_COUNT="2",
+            GIT_CONFIG_KEY_1="credential.https://github.com.helper",
+            GIT_CONFIG_VALUE_1=CREDENTIAL_HELPER,
+            ARENA_GITHUB_LOGIN=expected["github_login"],
+            ARENA_GITHUB_TOKEN=expected["token"],
+        )
+    public = {key: expected[key] for key in ("member_id", "github_id", "github_login", "git_name", "git_email")}
+    return env, public
+
+
 def commit_environment(config: dict, expected: dict, gh: str = "gh") -> tuple[dict[str, str], dict]:
     """Recheck the member's login and build the Git environment for committing and pushing one task."""
+    if expected.get("source") == "center":
+        return center_environment(expected)
     store = accounts(config)
     if store is None:
         raise GitHubIdentityError("This computer has no connected GitHub accounts")

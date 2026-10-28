@@ -1530,7 +1530,16 @@ class Worker:
                 evidence,
                 result,
                 status,
-                tuple(token for token in (job["run_token"], job.get("agent_token"), self.machine.token) if token),
+                tuple(
+                    token
+                    for token in (
+                        job["run_token"],
+                        job.get("agent_token"),
+                        self.machine.token,
+                        (job.get("commit_identity") or {}).get("token"),
+                    )
+                    if token
+                ),
             )
 
         def checkpoint(updates):
@@ -1636,7 +1645,7 @@ class Worker:
                 try:
                     commit_identity = github_accounts.commit_environment(self.config, job["commit_identity"])
                 except GitHubIdentityError as exc:
-                    raise WorkerError(f"Member GitHub login is unavailable on this computer: {exc}") from exc
+                    raise WorkerError(f"Member GitHub credentials are unavailable: {exc}") from exc
             env = {
                 k: v
                 for k, v in os.environ.items()

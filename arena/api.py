@@ -8,13 +8,14 @@ import secrets
 import time
 from pathlib import Path
 from typing import Annotated, Literal
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
+from .github_web import GitHubWeb, GitHubWebError
 from .store import ACTIVE, Conflict, Store, digest, encoded, uid
 
 Short = Annotated[str, Field(min_length=1, max_length=200)]
@@ -34,6 +35,13 @@ class Login(Input):
 class Invitation(Input):
     name: Short
     kind: Literal["member", "machine"]
+    # Lets the invited partner sign in with this GitHub account instead of pasting a token.
+    github_login: str = Field(default="", max_length=39, pattern=r"^[A-Za-z0-9-]*$")
+
+
+class GitHubApp(Input):
+    client_id: str = Field(min_length=4, max_length=100, pattern=r"^[A-Za-z0-9._-]+$")
+    client_secret: str = Field(min_length=10, max_length=200)
 
 
 class Policy(Input):
@@ -296,6 +304,9 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
     app = FastAPI(title="PAL Arena", docs_url=None, redoc_url=None, openapi_url=None)
     store = Store(root, quota=quota)
     app.state.store = store
+    github_web = GitHubWeb(store.root)
+    app.state.github_web = github_web
+    store.github_lookup = github_web.public
     app.state.upload_lock = asyncio.Lock()
 
     @contextlib.asynccontextmanager
@@ -540,6 +551,123 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
     def me(request: Request):
         return identity(request)
 
+    STATE_COOKIE = "pal_arena_github_state"
+
+    def callback_uri(request: Request) -> str:
+        host = request.headers.get("host") or request.url.netloc
+        # Tailscale Serve terminates HTTPS and forwards plain HTTP to this loopback port.
+        scheme = "https" if host.split(":")[0].endswith(".ts.net") else request.url.scheme
+        return f"{scheme}://{host}/api/github/callback"
+
+    def github_redirect(url: str, request: Request, state: str | None = None) -> RedirectResponse:
+        response = RedirectResponse(url, status_code=303)
+        if state:
+            # Lax: GitHub's redirect back is a top-level navigation from another site.
+            response.set_cookie(
+                STATE_COOKIE,
+                state,
+                httponly=True,
+                secure=callback_uri(request).startswith("https://"),
+                samesite="lax",
+                max_age=600,
+                path="/api/github",
+            )
+        return response
+
+    def github_failure(message: str) -> RedirectResponse:
+        response = RedirectResponse("/?" + urlencode({"github_error": message}), status_code=303)
+        response.delete_cookie(STATE_COOKIE, path="/api/github")
+        return response
+
+    @app.get("/api/github/status")
+    def github_status():
+        return {"enabled": github_web.app() is not None}
+
+    @app.get("/api/github/app")
+    def github_app_get(request: Request):
+        identity(request)
+        settings = github_web.app()
+        return {
+            "configured": settings is not None,
+            "client_id": settings["client_id"] if settings else "",
+            "callback_url": callback_uri(request),
+        }
+
+    @app.put("/api/github/app")
+    def github_app_set(data: GitHubApp, request: Request):
+        identity(request)
+        github_web.set_app(data.client_id, data.client_secret)
+        return {"configured": True, "client_id": data.client_id, "callback_url": callback_uri(request)}
+
+    @app.get("/api/github/login")
+    def github_login(request: Request):
+        try:
+            state, url = github_web.start("login", callback_uri(request))
+        except GitHubWebError as exc:
+            return github_failure(str(exc))
+        return github_redirect(url, request, state)
+
+    @app.get("/api/github/connect")
+    def github_connect(request: Request):
+        actor = identity(request)
+        try:
+            state, url = github_web.start("connect", callback_uri(request), actor["id"])
+        except GitHubWebError as exc:
+            return github_failure(str(exc))
+        return github_redirect(url, request, state)
+
+    @app.get("/api/github/callback")
+    def github_callback(request: Request, code: str = "", state: str = "", error: str = ""):
+        if error or not code:
+            return github_failure("GitHub 授权已取消")
+        if not state or not secrets.compare_digest(state, request.cookies.get(STATE_COOKIE, "")):
+            return github_failure("登录请求无效或已过期，请重新点一次「用 GitHub 登录」")
+        try:
+            result = github_web.finish(state, code)
+            user, tokens = result["user"], result["tokens"]
+            if result["purpose"] == "connect":
+                identity_id = result["identity_id"]
+            else:
+                identity_id, _ = github_web.identity_for(user)
+                if not identity_id:
+                    raise GitHubWebError(
+                        f"GitHub 账号 {user['login']} 还没有加入这个工作台。请成员在「伙伴与令牌」里邀请你时填写这个用户名。"
+                    )
+            with store.tx():
+                member = store.one(
+                    'SELECT id FROM identities i WHERE id=? AND kind="member" AND NOT EXISTS '
+                    "(SELECT 1 FROM identity_revocations r WHERE r.identity_id=i.id)",
+                    (identity_id,),
+                )
+                if not member:
+                    raise GitHubWebError("这个成员的访问已被撤销")
+                github_web.bind(identity_id, user, tokens)
+                session_token = secrets.token_urlsafe(32)
+                store.db.execute("DELETE FROM sessions WHERE expires<?", (time.time(),))
+                store.db.execute(
+                    "INSERT INTO sessions VALUES(?,?,?)", (digest(session_token), identity_id, time.time() + 7 * 86400)
+                )
+        except GitHubWebError as exc:
+            return github_failure(str(exc))
+        response = RedirectResponse("/?github=connected", status_code=303)
+        response.delete_cookie(STATE_COOKIE, path="/api/github")
+        response.set_cookie(
+            COOKIE,
+            session_token,
+            httponly=True,
+            secure=callback_uri(request).startswith("https://"),
+            samesite="strict",
+            max_age=7 * 86400,
+            path="/",
+        )
+        return response
+
+    @app.delete("/api/github/account")
+    def github_disconnect(request: Request):
+        actor = identity(request)
+        github_web.unbind(actor["id"])
+        return {"ok": True}
+
     @app.get("/api/setup/address")
     def setup_address(request: Request):
         """The HTTPS address other computers should use, as last published by `share`."""
@@ -582,7 +710,10 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
     def invite(data: Invitation, request: Request):
         with store.tx():
             identity(request)
-            return store.new_identity(data.name, data.kind)
+            created = store.new_identity(data.name, data.kind)
+        if data.kind == "member" and data.github_login:
+            github_web.expect(created["id"], data.github_login)
+        return created
 
     def invalidate_machine(machine_id):
         running = store.all(
@@ -611,9 +742,11 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
                 "SELECT i.id,i.name,i.kind,i.created,r.revoked_at FROM identities i "
                 "LEFT JOIN identity_revocations r ON r.identity_id=i.id ORDER BY i.created"
             )
+            github = github_web.logins()
             for item in identities:
                 item["is_self"] = item["id"] == actor["id"]
                 item["revoked"] = item["revoked_at"] is not None
+                item["github"] = github.get(item["id"])
             return {"identities": identities}
 
     @app.post("/api/identities/{identity_id}/rotate")
@@ -699,7 +832,9 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
                     store.event(task["project_id"], task["id"], "cancelled", "个人会话所属成员的访问权限已撤销")
             if identity_id == actor["id"]:
                 response.delete_cookie(COOKIE, path="/")
-            return {"ok": True, "revoked": True}
+        if target["kind"] == "member":
+            github_web.unbind(identity_id)
+        return {"ok": True, "revoked": True}
 
     @app.get("/api/state")
     def state(request: Request, project_id: str | None = None, channel: Literal["shared", "personal"] = "shared"):
@@ -1110,7 +1245,21 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
         with store.tx():
             actor = identity(request, "machine")
             worker_protocol(request)
-            return store.claim(actor["id"])
+            job = store.claim(actor["id"])
+        member = (job or {}).get("commit_identity")
+        project = (job or {}).get("project") or {}
+        if (
+            member
+            and member.get("source") == "center"
+            and project.get("repo")
+            and project["policy"].get("push_branches")
+        ):
+            # Refreshing may call GitHub, so it happens after the claim transaction has committed.
+            try:
+                member.update(github_web.push_credential(member["member_id"]))
+            except GitHubWebError as exc:
+                member["credential_error"] = str(exc)
+        return job
 
     @app.post("/api/machines/workspaces/status")
     def machine_workspaces_status(data: WorkspaceStatus, request: Request):

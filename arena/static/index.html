@@ -25,8 +25,8 @@
         if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
       } catch {}
     </script>
-    <script type="module" crossorigin src="/static/assets/index-B41zWapN.js"></script>
-    <link rel="stylesheet" crossorigin href="/static/assets/index-B1s8irNO.css">
+    <script type="module" crossorigin src="/static/assets/index-BFwImAyu.js"></script>
+    <link rel="stylesheet" crossorigin href="/static/assets/index-BRsTcCW9.css">
   </head>
   <body>
     <section id="login-screen" class="login-screen" hidden>
@@ -44,6 +44,10 @@
         <p class="login-copy">
           你和伙伴在这里提需求，负责人拆任务，各台电脑上的 AI 成员领取执行，再由另一位成员独立验收。
         </p>
+        <a id="github-login" class="button github-button" href="/api/github/login" hidden
+          ><span data-icon="github"></span>用 GitHub 登录</a
+        >
+        <p id="login-divider" class="login-divider" hidden><span>或者粘贴访问令牌</span></p>
         <form id="login-form">
           <label for="login-token">访问令牌</label
           ><input

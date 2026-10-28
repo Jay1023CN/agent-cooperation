@@ -587,6 +587,32 @@ input[type='checkbox'] {
   height: 42px;
   margin-top: var(--space-2);
 }
+.github-button {
+  height: 44px;
+  margin-top: var(--space-4);
+  border-color: light-dark(#1f2328, #e6edf3);
+  background: light-dark(#1f2328, #e6edf3);
+  color: light-dark(#ffffff, #1f2328);
+  font-size: var(--text-base);
+}
+.github-button:hover:not(:disabled) {
+  background: light-dark(#000000, #ffffff);
+}
+.login-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-2) 0 calc(-1 * var(--space-2));
+  color: var(--faint);
+  font-size: var(--text-xs);
+}
+.login-divider::before,
+.login-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
 .login-help {
   color: var(--muted);
   font-size: var(--text-sm);
