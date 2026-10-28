@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.7.1 (2026-10-28)
+
+### Bug Fixes
+
+- 原生安装包启动检查适配 Agent Cooperation 品牌
+  ([`3d47174`](https://github.com/Jay1023CN/agent-cooperation/commit/3d4717451a433bbb29dee26d0c81f1b8ad185d29))
+
+### Chores
+
+- Sync version to config.py [skip ci]
+  ([`5659320`](https://github.com/Jay1023CN/agent-cooperation/commit/565932001ee2f8876e26aa0ce791d581ad50a7cb))
+
+
 ## v1.7.0 (2026-10-28)
 
 ### Chores
