@@ -425,10 +425,15 @@ function refreshTaskDialog() {
   const task = state.tasks.find((item) => item.id === modalTaskId);
   if (!task) return;
   const signature = JSON.stringify(task);
-  if (signature === modalTaskSignature) return;
+  if (signature === modalTaskSignature) {
+    refreshTaskTimeline();
+    return;
+  }
   const scroll = $('#modal').scrollTop;
+  const historyOpen = $('#task-timeline')?.open;
   const id = modalTaskId;
   openTask(id);
+  if (historyOpen) $('#task-timeline').open = true;
   $('#modal').scrollTop = scroll;
 }
 function openInvite(kind = 'member') {
@@ -723,7 +728,7 @@ const { openProject, openRequirements, openProjectSettings } = createProjectDial
   },
 });
 
-const { openTaskForm, updateTaskAgentOptions, openTask } = createTaskDialogs({
+const { openTaskForm, updateTaskAgentOptions, openTask, refreshTaskTimeline } = createTaskDialogs({
   getState: () => state,
   project,
   editable,
@@ -736,6 +741,8 @@ const { openTaskForm, updateTaskAgentOptions, openTask } = createTaskDialogs({
   refresh,
   toast,
   agentName,
+  api,
+  demo,
   trackTask: (task) => {
     modalTaskId = task.id;
     modalTaskSignature = JSON.stringify(task);

@@ -1972,6 +1972,18 @@ kbd {
   font-size: var(--text-sm);
   overflow-wrap: anywhere;
 }
+.task-history .log-event {
+  grid-template-columns: 88px 4px minmax(0, 1fr);
+}
+.task-history .log-event p {
+  white-space: pre-wrap;
+}
+.task-history-content {
+  margin-top: var(--space-3);
+}
+.timeline-more {
+  margin-bottom: var(--space-3);
+}
 
 /* ---------- Modal ---------- */
 dialog {

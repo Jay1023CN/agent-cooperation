@@ -9,6 +9,7 @@ import {
   asArray,
   lines,
 } from '../components/ui.js';
+import { renderTaskTimeline, taskTimelineEvents, taskDialogSignature } from './task-timeline.js';
 
 export function createTaskDialogs({
   getState,
@@ -24,7 +25,10 @@ export function createTaskDialogs({
   toast,
   agentName,
   trackTask,
+  api,
+  demo = false,
 }) {
+  let syncTimeline = () => {};
   function openTaskForm() {
     const state = getState();
     if (!editable() || !requireProject()) return;
@@ -129,9 +133,73 @@ export function createTaskDialogs({
               )
               .join('')}</div>`
           : ''
-      }${artifactRows.length ? `<div class="detail-section"><h3>关联成果</h3>${artifactRows.map((file) => `<p>${e(file.name)} · ${size(file.size)}</p>`).join('')}</div>` : ''}${recoveryNote(task)}<div class="modal-actions">${['failed', 'blocked', 'interrupted', 'changes_requested', 'cancelled'].includes(task.status) ? `<button class="button primary" type="button" data-action="retry-task" data-id="${e(task.id)}">检查后重试</button>` : ''}${['queued', 'running', 'in_review', 'coordinating'].includes(task.status) ? `<button class="button danger" type="button" data-action="cancel-task" data-id="${e(task.id)}">停止这个任务</button>` : ''}<button class="button" type="button" data-action="close-modal">关闭</button></div>`,
+      }${artifactRows.length ? `<div class="detail-section"><h3>关联成果</h3>${artifactRows.map((file) => `<p>${e(file.name)} · ${size(file.size)}</p>`).join('')}</div>` : ''}<details class="detail-section task-history" id="task-timeline"><summary>执行与验收记录</summary><div class="task-history-content"><p class="muted small">展开后加载运行记录。</p></div></details>${recoveryNote(task)}<div class="modal-actions">${['failed', 'blocked', 'interrupted', 'changes_requested', 'cancelled'].includes(task.status) ? `<button class="button primary" type="button" data-action="retry-task" data-id="${e(task.id)}">检查后重试</button>` : ''}${['queued', 'running', 'in_review', 'coordinating'].includes(task.status) ? `<button class="button danger" type="button" data-action="cancel-task" data-id="${e(task.id)}">停止这个任务</button>` : ''}<button class="button" type="button" data-action="close-modal">关闭</button></div>`,
     );
     trackTask(task);
+    bindTimeline(task, state);
+  }
+
+  function bindTimeline(task, state) {
+    const details = $('#task-timeline');
+    const content = $('.task-history-content', details);
+    let busy = false,
+      loaded = false,
+      events = [],
+      nextBefore = null,
+      loadedSignature = '';
+    syncTimeline = () => {
+      if (!loaded || !content.isConnected) return;
+      const freshState = getState();
+      const freshTask = freshState.tasks.find((item) => item.id === task.id);
+      const button = $('.timeline-new', content);
+      if (button && freshTask) button.hidden = taskDialogSignature(freshState, freshTask) === loadedSignature;
+    };
+    async function load(before = null) {
+      if (busy || !content.isConnected) return;
+      busy = true;
+      const previousButton = before
+        ? $('.timeline-more', content)
+        : $('.timeline-new, .timeline-retry', content);
+      if (previousButton) previousButton.disabled = true;
+      else content.innerHTML = '<p class="muted small">正在加载运行记录…</p>';
+      try {
+        const freshState = getState();
+        const freshTask = freshState.tasks.find((item) => item.id === task.id) || task;
+        const signature = taskDialogSignature(freshState, freshTask);
+        const query = new URLSearchParams();
+        if (before) query.set('before', before);
+        const result = demo
+          ? {
+              events: taskTimelineEvents(state, task).sort((a, b) => a.created - b.created),
+              next_before: null,
+            }
+          : await api(`/api/tasks/${encodeURIComponent(task.id)}/timeline?${query}`);
+        // A closed or replaced dialog must never receive an old task's response.
+        if (!content.isConnected) return;
+        events = before ? [...result.events, ...events] : result.events;
+        nextBefore = result.next_before;
+        loaded = true;
+        if (!before) loadedSignature = signature;
+        content.innerHTML = `<button class="button small timeline-new" type="button" hidden>有新记录，刷新</button>${nextBefore ? '<button class="button small timeline-more" type="button">加载较早记录</button>' : ''}${renderTaskTimeline(events)}<p class="form-error timeline-error" role="alert"></p>`;
+        $('.timeline-more', content)?.addEventListener('click', () => load(nextBefore));
+        $('.timeline-new', content).addEventListener('click', () => load());
+        syncTimeline();
+      } catch (error) {
+        if (!content.isConnected) return;
+        if (previousButton) {
+          previousButton.disabled = false;
+          $('.timeline-error', content).textContent = error.message;
+        } else {
+          content.innerHTML = `<p class="form-error timeline-error" role="alert">${e(error.message)}</p><button class="button small timeline-retry" type="button">重新加载</button>`;
+          $('button', content).addEventListener('click', () => load());
+        }
+      } finally {
+        busy = false;
+      }
+    }
+    details.addEventListener('toggle', () => {
+      if (details.open && !loaded) load();
+    });
   }
 
   function evidenceLinks(task) {
@@ -162,5 +230,5 @@ export function createTaskDialogs({
     };
     return notes[task.status] ? `<div class="notice">${e(notes[task.status])}</div>` : '';
   }
-  return { openTaskForm, updateTaskAgentOptions, openTask };
+  return { openTaskForm, updateTaskAgentOptions, openTask, refreshTaskTimeline: () => syncTimeline() };
 }

@@ -1073,6 +1073,32 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
                 permission["options"] = json.loads(permission["options"])
             return task
 
+    @app.get("/api/tasks/{task_id}/timeline")
+    def task_timeline(
+        task_id: str,
+        request: Request,
+        before: Annotated[int | None, Query(ge=1, le=2**63 - 1)] = None,
+        limit: Annotated[int, Query(ge=1, le=100)] = 40,
+    ):
+        actor = identity(request)
+        with store.lock:
+            task = visible_task(actor, task_id)
+            # Include independent reviews, but never pull in another channel's history.
+            events = store.all(
+                "SELECT e.id,e.task_id,e.kind,e.text,e.created,t.title AS task_title,t.kind AS task_kind "
+                "FROM events e JOIN tasks t ON t.id=e.task_id "
+                "WHERE t.project_id=? AND t.channel=? AND (t.id=? OR (t.source_id=? AND t.kind='reviewer')) "
+                "AND (? IS NULL OR e.id<?) ORDER BY e.id DESC LIMIT ?",
+                (task["project_id"], task["channel"], task_id, task_id, before, before, limit + 1),
+            )
+            more = len(events) > limit
+            events = events[:limit]
+            return {
+                "task_id": task_id,
+                "events": list(reversed(events)),
+                "next_before": events[-1]["id"] if more else None,
+            }
+
     def retry_task(task, reason):
         task_id = task["id"]
         if (
