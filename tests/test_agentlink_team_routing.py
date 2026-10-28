@@ -2,6 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from agent_link.assignment import Policy, Task
+from agent_link.server import Agents, build_server
 from agent_link.team_routing import TeamProfiles, recommend_team
 
 
@@ -89,3 +90,24 @@ def test_owner_and_machine_references_must_exist():
     data["agents"][0]["owner_id"] = "unknown"
     with pytest.raises(ValidationError, match="reference"):
         TeamProfiles.model_validate(data)
+
+
+@pytest.mark.asyncio
+async def test_mcp_uses_declared_profiles_and_supplied_observations(tmp_path, monkeypatch):
+    profiles, agents, runtimes = fixtures()
+    path = tmp_path / "team.json"
+    path.write_text(profiles.model_dump_json(), encoding="utf-8")
+    monkeypatch.setenv("AGENT_COOPERATION_PROFILES", str(path))
+    server = build_server(Agents())
+    response = await server.call_tool(
+        "recommend_configured_team",
+        {
+            "task": {"kind": "worker", "capability": "code", "state": "new", "inputs_verified": True},
+            "policy": {"routing": "economy"},
+            "agents": agents,
+            "runtimes": runtimes,
+            "runs": {"fast": [], "deep": []},
+        },
+    )
+    assert "fast" in str(response)
+    assert "alice-gh" in str(response)

@@ -71,7 +71,9 @@ def build_server(agents):
         return recommend(request)
 
     @mcp.tool()
-    def recommend_configured_team(task: Task, policy: Policy, agents: list[dict], runtimes: list[dict], runs: dict) -> dict:
+    def recommend_configured_team(
+        task: Task, policy: Policy, agents: list[dict], runtimes: list[dict], runs: dict
+    ) -> dict:
         """Rank configured members using caller-supplied Multica observations.
 
         Read agents and runtimes with `multica agent list --output json` and
