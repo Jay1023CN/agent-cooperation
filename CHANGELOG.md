@@ -2,6 +2,22 @@
 
 <!-- version list -->
 
+## v1.4.0 (2026-10-28)
+
+### Chores
+
+- Sync version to config.py [skip ci]
+  ([`3ccfdf3`](https://github.com/Jay1023CN/agent-cooperation/commit/3ccfdf311f81f1c6a96fc868365fe9f5cb54bfbd))
+
+### Features
+
+- 增加设备连接检查与实时分工建议
+  ([`fee5471`](https://github.com/Jay1023CN/agent-cooperation/commit/fee5471ddd4b88ca857941e3ac5c0ee7685242ea))
+
+- **ui**: 调度台第二版：机位轨道、命令面板与就地处理
+  ([`76b9cf1`](https://github.com/Jay1023CN/agent-cooperation/commit/76b9cf14e5c0de265985f1e69e461d691dd291db))
+
+
 ## v1.3.0 (2026-10-28)
 
 ### Chores
