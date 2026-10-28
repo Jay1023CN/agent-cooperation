@@ -1,5 +1,7 @@
 # 成员身份与分工配置
 
+`recommend_live_team` 可以直接调用本地平台 CLI 获取代理、运行时和任务状态，结合团队资料推荐成员。配置 `AGENT_COOPERATION_PROFILES` 后，可选用 `AGENT_COOPERATION_MULTICA_COMMAND` 指定 CLI 路径、`AGENT_COOPERATION_MULTICA_PROFILE` 选择登录配置。数据采集开始时记录时间，采集时间过长时不会把旧状态当成新状态。无法直接访问平台时，仍可使用下文的快照方式。
+
 团队配置使用 [示例文件](team-profiles.example.json) 的结构，每个成员有自己的 Multica 成员 ID、名称和可选的 Git / GitHub 身份；每个代理关联所属成员及 Multica 电脑和代理 ID。文件不存访问令牌、密码或订阅凭据。`daemon_id` 来自 `multica runtime list --output json`，`agent_id` 及代理所有者 ID 来自 `multica agent list --output json`。配置的所属成员必须与代理记录的所有者一致。
 
 由成员填写能力和偏好：`roles`、`capabilities`、擅长任务 `preferred_for`、可承接难度 `max_difficulty`，以及 1–5 分的质量、速度、经济性（分数越高越符合这一项）。额度未知时保持 `unknown`；这些分数是团队自己的相对判断，不是系统推算的模型价格。可以逐步修改，不必一开始就了解所有模型。

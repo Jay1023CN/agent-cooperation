@@ -71,6 +71,32 @@ def build_server(agents):
         return recommend(request)
 
     @mcp.tool()
+    def recommend_live_team(task: Task, policy: Policy) -> dict:
+        """Recommend a team member from current platform data and the team's profiles.
+
+        Reads agents, runtimes and their task histories directly using the local
+        platform CLI. AGENT_COOPERATION_PROFILES identifies the profile file;
+        AGENT_COOPERATION_MULTICA_COMMAND and AGENT_COOPERATION_MULTICA_PROFILE
+        optionally select an installed CLI and account. This does not dispatch
+        or reserve an agent; check the platform again before assigning work.
+        """
+        from .team_routing import live_recommend
+
+        path = os.environ.get("AGENT_COOPERATION_PROFILES")
+        if not path:
+            raise BridgeError("请先配置团队成员和代理资料，再进行自动分工。")
+        try:
+            return live_recommend(
+                task,
+                policy,
+                path,
+                command=os.environ.get("AGENT_COOPERATION_MULTICA_COMMAND", "multica"),
+                profile=os.environ.get("AGENT_COOPERATION_MULTICA_PROFILE") or None,
+            )
+        except (OSError, ValueError, RuntimeError) as exc:
+            raise BridgeError(f"无法读取团队当前状态：{exc}") from exc
+
+    @mcp.tool()
     def recommend_configured_team(
         task: Task, policy: Policy, agents: list[dict], runtimes: list[dict], runs: dict, observed_at: float
     ) -> dict:

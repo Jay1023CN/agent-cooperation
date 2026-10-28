@@ -540,6 +540,15 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
     def me(request: Request):
         return identity(request)
 
+    @app.get("/api/setup/center")
+    def setup_center(request: Request):
+        identity(request)
+        from agent_link.device_setup import inspect_device
+
+        result = inspect_device()
+        result["scope"] = "workbench_host"
+        return result
+
     @app.post("/api/logout")
     def logout(request: Request, response: Response):
         identity(request)

@@ -159,6 +159,7 @@ def recommend_team(
 
 def live_recommend(task: Task, policy: Policy, config_path: str, command="multica", profile=None):
     profiles = TeamProfiles.model_validate_json(Path(config_path).read_text(encoding="utf-8"))
+    observed_at = time.time()
     agents = call_multica(command, profile, "agent", "list")
     runtimes = call_multica(command, profile, "runtime", "list")
     relevant = {item.daemon_id for item in profiles.machines}
@@ -167,4 +168,4 @@ def live_recommend(task: Task, policy: Policy, config_path: str, command="multic
     for agent in agents:
         if not agent.get("archived_at") and runtime_machine.get(agent.get("runtime_id")) in relevant:
             runs[agent["id"]] = call_multica(command, profile, "agent", "tasks", agent["id"], "--limit", "200")
-    return recommend_team(task, policy, profiles, agents, runtimes, runs)
+    return recommend_team(task, policy, profiles, agents, runtimes, runs, observed_at=observed_at)

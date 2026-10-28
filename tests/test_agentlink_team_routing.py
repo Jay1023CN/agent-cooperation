@@ -159,3 +159,57 @@ async def test_mcp_uses_declared_profiles_and_supplied_observations(tmp_path, mo
         },
     )
     assert "fast" in str(response)
+
+
+@pytest.mark.asyncio
+async def test_mcp_reads_live_team_observations(tmp_path, monkeypatch):
+    from agent_link import team_routing
+
+    profiles, agents, runtimes = fixtures()
+    path = tmp_path / "team.json"
+    path.write_text(profiles.model_dump_json(), encoding="utf-8")
+    monkeypatch.setenv("AGENT_COOPERATION_PROFILES", str(path))
+    monkeypatch.setenv("AGENT_COOPERATION_MULTICA_COMMAND", "platform-cli")
+    monkeypatch.setenv("AGENT_COOPERATION_MULTICA_PROFILE", "team-profile")
+    calls = []
+
+    def call(command, profile, *args):
+        calls.append((command, profile, args))
+        if args == ("agent", "list"):
+            return agents
+        if args == ("runtime", "list"):
+            return runtimes
+        assert args[:2] == ("agent", "tasks")
+        return [{"status": "running"}] if args[2] == "fast" else []
+
+    monkeypatch.setattr(team_routing, "call_multica", call)
+    server = build_server(Agents())
+    response = await server.call_tool(
+        "recommend_live_team",
+        {
+            "task": {"kind": "worker", "capability": "code", "state": "new", "inputs_verified": True},
+            "policy": {"routing": "economy"},
+        },
+    )
+    assert '"recommended_agent_id":"deep"' in str(response).replace(" ", "")
+    assert len(calls) == 4
+    assert all(command == "platform-cli" and profile == "team-profile" for command, profile, _ in calls)
+
+
+def test_live_observation_timestamp_is_taken_before_collection(tmp_path, monkeypatch):
+    from agent_link import team_routing
+
+    profiles, agents, runtimes = fixtures()
+    path = tmp_path / "team.json"
+    path.write_text(profiles.model_dump_json(), encoding="utf-8")
+    observed = []
+
+    def call(command, profile, *args):
+        observed.append(time.time())
+        return agents if args == ("agent", "list") else runtimes if args == ("runtime", "list") else []
+
+    monkeypatch.setattr(team_routing, "call_multica", call)
+    result = team_routing.live_recommend(
+        Task(kind="worker", capability="code", state="new", inputs_verified=True), Policy(), str(path)
+    )
+    assert result["ranked"][0]["observed_at"] <= observed[0]
