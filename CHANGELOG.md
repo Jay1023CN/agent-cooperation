@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.8.2 (2026-10-28)
+
+### Bug Fixes
+
+- ACP 退出时容忍已断开的输入管道并继续清理资源
+  ([`667382f`](https://github.com/Jay1023CN/agent-cooperation/commit/667382f5a8f0162a0537a71ac2a133ca80c04e2a))
+
+### Chores
+
+- Sync version to config.py [skip ci]
+  ([`430efd9`](https://github.com/Jay1023CN/agent-cooperation/commit/430efd90cacaf89221ad77f86954b6370913c8f0))
+
+
 ## v1.8.1 (2026-10-28)
 
 ### Bug Fixes
