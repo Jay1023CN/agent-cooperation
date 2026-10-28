@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.4.1 (2026-10-28)
+
+### Bug Fixes
+
+- 区分对话讨论与任务执行
+  ([`7fdae13`](https://github.com/Jay1023CN/agent-cooperation/commit/7fdae13159fdddf746d21020002a1f619159b45e))
+
+### Chores
+
+- Sync version to config.py [skip ci]
+  ([`2ea1d61`](https://github.com/Jay1023CN/agent-cooperation/commit/2ea1d61feb89b2f1c34e94cd832d1e8277c69b90))
+
+
 ## v1.4.0 (2026-10-28)
 
 ### Chores
