@@ -2,6 +2,24 @@
 
 <!-- version list -->
 
+## v1.2.0 (2026-10-28)
+
+### Chores
+
+- Sync version to config.py [skip ci]
+  ([`61763a8`](https://github.com/Jay1023CN/agent-cooperation/commit/61763a841636a42efcde694da4a32742c20d3ed5))
+
+### Documentation
+
+- 重写项目首页
+  ([`b0815bb`](https://github.com/Jay1023CN/agent-cooperation/commit/b0815bb15af88f63f5356b51378a55c22650794b))
+
+### Features
+
+- **ui**: 重做调度台界面
+  ([`edf613d`](https://github.com/Jay1023CN/agent-cooperation/commit/edf613dc7a62f56f36c2f2665f1ee6d95fce2dae))
+
+
 ## v1.0.0 (2026-10-28)
 
 - Initial Release
