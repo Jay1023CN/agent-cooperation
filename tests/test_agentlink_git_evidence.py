@@ -34,6 +34,16 @@ def test_verify_git_delivery_checks_actual_files_and_dirty_state(tmp_path):
     assert result["author"] == {"name": "Test", "email": "test@example.invalid"}
     assert result["committer"] == {"name": "Test", "email": "test@example.invalid"}
     assert "not proof of a GitHub account" in result["note"]
+    assert (
+        inspect_git_delivery(
+            str(tmp_path), head, base, expected_author={"name": "Test", "email": "test@example.invalid"}
+        )["author"]
+        == result["author"]
+    )
+    with pytest.raises(EvidenceError, match="does not match"):
+        inspect_git_delivery(
+            str(tmp_path), head, base, expected_author={"name": "Other", "email": "other@example.invalid"}
+        )
     assert result["changed_paths"] == ["file.txt"]
     (tmp_path / "untracked.txt").write_text("pending", encoding="utf-8")
     assert not inspect_git_delivery(str(tmp_path), head, base)["clean"]

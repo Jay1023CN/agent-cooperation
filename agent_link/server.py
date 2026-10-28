@@ -72,14 +72,17 @@ def build_server(agents):
 
     @mcp.tool()
     def recommend_configured_team(
-        task: Task, policy: Policy, agents: list[dict], runtimes: list[dict], runs: dict
+        task: Task, policy: Policy, agents: list[dict], runtimes: list[dict], runs: dict, observed_at: float
     ) -> dict:
         """Rank configured members using caller-supplied Multica observations.
 
         Read agents and runtimes with `multica agent list --output json` and
         `multica runtime list --output json`. For every agent on a configured
         machine, supply `multica agent tasks ID --limit 200 --output json` in
-        runs keyed by agent ID. AGENT_COOPERATION_PROFILES selects the profiles.
+        runs keyed by agent ID. Include each agent's id, runtime_id, owner_id,
+        max_concurrent_tasks, name and model; include each runtime's id,
+        daemon_id, status and provider. observed_at is the Unix timestamp when
+        collection began. AGENT_COOPERATION_PROFILES selects the profiles.
         The tool cannot authenticate supplied observations and does not dispatch.
         """
         from pathlib import Path
@@ -90,7 +93,27 @@ def build_server(agents):
         if not path:
             raise BridgeError("Set AGENT_COOPERATION_PROFILES to the team's profiles JSON file.")
         profiles = TeamProfiles.model_validate_json(Path(path).read_text(encoding="utf-8"))
-        return recommend_team(task, policy, profiles, agents, runtimes, runs)
+        return recommend_team(task, policy, profiles, agents, runtimes, runs, observed_at=observed_at)
+
+    @mcp.tool()
+    def recommend_configured_team_from_file(task: Task, policy: Policy, snapshot_path: str) -> dict:
+        """Rank using a JSON snapshot with agents, runtimes, runs and observed_at.
+
+        Collect the unmodified JSON output of Multica's agent list, runtime list,
+        and agent tasks commands. Store runs as a map keyed by agent ID; pass the
+        absolute path to the local snapshot. No task is started by this tool.
+        """
+        from pathlib import Path
+
+        path = Path(snapshot_path)
+        if not path.is_absolute() or not path.is_file() or path.stat().st_size > 5_000_000:
+            raise BridgeError("Snapshot must be an existing absolute JSON file under 5 MB.")
+        snapshot = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(snapshot, dict) or not {"agents", "runtimes", "runs", "observed_at"} <= snapshot.keys():
+            raise BridgeError("Snapshot needs agents, runtimes, runs and observed_at fields.")
+        return recommend_configured_team(
+            task, policy, snapshot["agents"], snapshot["runtimes"], snapshot["runs"], snapshot["observed_at"]
+        )
 
     @mcp.tool()
     def agent_sessions(agent: str, limit: int = 30) -> dict:

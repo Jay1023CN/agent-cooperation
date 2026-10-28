@@ -12,7 +12,9 @@ class EvidenceError(ValueError):
     pass
 
 
-def inspect_git_delivery(workspace: str, expected_commit: str, base_commit: str) -> dict:
+def inspect_git_delivery(
+    workspace: str, expected_commit: str, base_commit: str, *, expected_author: dict | None = None
+) -> dict:
     """Verify exact commits, ancestry, worktree cleanliness and changed paths."""
     if not all(re.fullmatch(r"(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})", v or "") for v in (expected_commit, base_commit)):
         raise EvidenceError("Full commit hashes are required")
@@ -61,6 +63,14 @@ def inspect_git_delivery(workspace: str, expected_commit: str, base_commit: str)
     )
     if len(identity) != 4:
         raise EvidenceError("Git commit identity could not be read")
+    author = {"name": identity[0], "email": identity[1]}
+    if expected_author is not None:
+        if not isinstance(expected_author, dict) or set(expected_author) != {"name", "email"}:
+            raise EvidenceError("Expected author must contain name and email")
+        if not all(isinstance(expected_author[key], str) and expected_author[key] for key in ("name", "email")):
+            raise EvidenceError("Expected author name and email must be nonempty")
+        if author != expected_author:
+            raise EvidenceError("Commit author does not match the configured member identity")
     status = git("status", "--porcelain=v1", "-z", "--untracked-files=all").stdout
     data = git("diff", "--no-ext-diff", "--name-only", "-z", base, head, "--").stdout
     final_head = git("rev-parse", "--verify", "HEAD^{commit}").stdout.decode("ascii").strip()
@@ -72,7 +82,7 @@ def inspect_git_delivery(workspace: str, expected_commit: str, base_commit: str)
         "commit": head,
         "base": base,
         "base_is_ancestor": ancestor,
-        "author": {"name": identity[0], "email": identity[1]},
+        "author": author,
         "committer": {"name": identity[2], "email": identity[3]},
         "clean": not bool(status),
         "changed_paths": paths[:500],

@@ -1,3 +1,6 @@
+import json
+import time
+
 import pytest
 from pydantic import ValidationError
 
@@ -42,8 +45,8 @@ def fixtures():
         }
     )
     agents = [
-        {"id": "fast", "name": "Fast", "runtime_id": "r1", "max_concurrent_tasks": 1},
-        {"id": "deep", "name": "Deep", "runtime_id": "r2", "max_concurrent_tasks": 2},
+        {"id": "fast", "name": "Fast", "owner_id": "alice", "runtime_id": "r1", "max_concurrent_tasks": 1},
+        {"id": "deep", "name": "Deep", "owner_id": "bob", "runtime_id": "r2", "max_concurrent_tasks": 2},
     ]
     runtimes = [
         {"id": "r1", "daemon_id": "computer", "status": "online", "provider": "qoder"},
@@ -92,6 +95,34 @@ def test_owner_and_machine_references_must_exist():
         TeamProfiles.model_validate(data)
 
 
+def test_claimed_owner_must_match_multica_owner():
+    profiles, agents, runtimes = fixtures()
+    agents[0]["owner_id"] = "bob"
+    task = Task(kind="worker", capability="code", state="new", inputs_verified=True)
+    result = recommend_team(
+        task, Policy(routing="economy"), profiles, agents, runtimes, {"fast": [], "deep": []}, now=10
+    )
+    assert result["recommended_agent_id"] == "deep"
+    assert any("所有者" in reason for reason in result["excluded"][0]["reasons"])
+
+
+def test_missing_machine_identity_is_reported_not_misclassified_as_offline():
+    profiles, agents, runtimes = fixtures()
+    del runtimes[0]["daemon_id"]
+    task = Task(kind="worker", capability="code", state="new", inputs_verified=True)
+    with pytest.raises(ValueError, match="daemon_id"):
+        recommend_team(task, Policy(), profiles, agents, runtimes, {"fast": [], "deep": []}, now=10)
+
+
+def test_old_snapshot_is_not_renewed_by_reading_it_again():
+    profiles, agents, runtimes = fixtures()
+    task = Task(kind="worker", capability="code", state="new", inputs_verified=True)
+    result = recommend_team(
+        task, Policy(), profiles, agents, runtimes, {"fast": [], "deep": []}, now=200, observed_at=1
+    )
+    assert result["recommended_agent_id"] is None
+
+
 @pytest.mark.asyncio
 async def test_mcp_uses_declared_profiles_and_supplied_observations(tmp_path, monkeypatch):
     profiles, agents, runtimes = fixtures()
@@ -107,7 +138,24 @@ async def test_mcp_uses_declared_profiles_and_supplied_observations(tmp_path, mo
             "agents": agents,
             "runtimes": runtimes,
             "runs": {"fast": [], "deep": []},
+            "observed_at": time.time(),
         },
     )
     assert "fast" in str(response)
     assert "alice-gh" in str(response)
+    snapshot = tmp_path / "snapshot.json"
+    snapshot.write_text(
+        json.dumps(
+            {"agents": agents, "runtimes": runtimes, "runs": {"fast": [], "deep": []}, "observed_at": time.time()}
+        ),
+        encoding="utf-8",
+    )
+    response = await server.call_tool(
+        "recommend_configured_team_from_file",
+        {
+            "task": {"kind": "worker", "capability": "code", "state": "new", "inputs_verified": True},
+            "policy": {"routing": "economy"},
+            "snapshot_path": str(snapshot),
+        },
+    )
+    assert "fast" in str(response)

@@ -1,7 +1,7 @@
 {
   "members": [
     {
-      "id": "member-1",
+      "id": "填写 Multica 成员 ID",
       "name": "成员名称",
       "github_login": null,
       "git_name": null,
@@ -14,7 +14,7 @@
   "agents": [
     {
       "agent_id": "填写 Multica agent ID",
-      "owner_id": "member-1",
+      "owner_id": "填写 Multica 成员 ID",
       "machine_id": "填写 Multica daemon ID",
       "roles": ["worker"],
       "capabilities": ["code", "docs"],

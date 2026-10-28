@@ -64,9 +64,13 @@ def build_server(
             return store.inspect(lineage) or {"state": "missing"}
 
         @mcp.tool()
-        def verify_git_delivery(lineage: str, expected_commit: str, base_commit: str) -> dict:
+        def verify_git_delivery(
+            lineage: str, expected_commit: str, base_commit: str, expected_author: dict | None = None
+        ) -> dict:
             """Check submitted Git state and changed files without running project tests."""
-            return inspect_git_delivery(store.submitted_workspace(lineage), expected_commit, base_commit)
+            return inspect_git_delivery(
+                store.submitted_workspace(lineage), expected_commit, base_commit, expected_author=expected_author
+            )
 
         @mcp.tool()
         def renew_task(lineage: str, task_id: str, issue_id: str = "") -> dict:

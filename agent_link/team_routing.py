@@ -20,6 +20,7 @@ class Member(ConfigModel):
     id: str = Field(min_length=1)
     name: str = Field(min_length=1)
     github_login: str | None = None
+    github_id: int | None = None
     git_name: str | None = None
     git_email: str | None = None
 
@@ -67,9 +68,23 @@ class TeamProfiles(ConfigModel):
 ACTIVE = {"queued", "dispatched", "running", "waiting_local_directory"}
 
 
-def recommend_team(task: Task, policy: Policy, profiles: TeamProfiles, agents, runtimes, runs, *, now=None):
+def recommend_team(
+    task: Task, policy: Policy, profiles: TeamProfiles, agents, runtimes, runs, *, now=None, observed_at=None
+):
     """Use declared strengths and one complete Multica observation; do not dispatch."""
+    if not all(
+        isinstance(item, dict) and {"id", "runtime_id", "owner_id", "max_concurrent_tasks"} <= item.keys()
+        for item in agents
+    ):
+        raise ValueError(
+            "Agent observations need id, runtime_id, owner_id and max_concurrent_tasks; pass the CLI output intact."
+        )
+    if not all(
+        isinstance(item, dict) and {"id", "daemon_id", "status", "provider"} <= item.keys() for item in runtimes
+    ):
+        raise ValueError("Runtime observations need id, daemon_id, status and provider; pass the CLI output intact.")
     now = time.time() if now is None else now
+    observed_at = now if observed_at is None else observed_at
     by_agent = {item["id"]: item for item in agents}
     by_runtime = {item["id"]: item for item in runtimes}
     members = {item.id: item for item in profiles.members}
@@ -90,10 +105,14 @@ def recommend_team(task: Task, policy: Policy, profiles: TeamProfiles, agents, r
         active[agent["id"]] = sum(item.get("status") in ACTIVE for item in history)
         machine_active[machine] += active[agent["id"]]
     candidates = []
+    owner_mismatches = set()
     for declared in profiles.agents:
         agent = by_agent.get(declared.agent_id, {})
         runtime = by_runtime.get(agent.get("runtime_id"), {})
         matches_machine = runtime.get("daemon_id") == declared.machine_id
+        owner_matches = agent.get("owner_id") == declared.owner_id
+        if not owner_matches:
+            owner_mismatches.add(declared.agent_id)
         online = runtime.get("status") == "online" and matches_machine
         candidates.append(
             Candidate(
@@ -104,10 +123,10 @@ def recommend_team(task: Task, policy: Policy, profiles: TeamProfiles, agents, r
                 model=agent.get("model") or None,
                 roles=declared.roles,
                 capabilities=declared.capabilities,
-                enabled=declared.enabled and not bool(agent.get("archived_at")),
+                enabled=declared.enabled and not bool(agent.get("archived_at")) and owner_matches,
                 online=online,
                 dispatchable=online and bool(agent),
-                observed_at=now,
+                observed_at=observed_at,
                 agent_active=active.get(declared.agent_id),
                 agent_limit=agent.get("max_concurrent_tasks"),
                 machine_active=None if declared.machine_id in machine_unknown else machine_active[declared.machine_id],
@@ -123,13 +142,16 @@ def recommend_team(task: Task, policy: Policy, profiles: TeamProfiles, agents, r
             )
         )
     result = recommend(Assignment(task=task, policy=policy, candidates=candidates), now=now)
+    for item in result["excluded"]:
+        if item["agent_id"] in owner_mismatches:
+            item["reasons"].append("配置的成员与 Multica 代理所有者不匹配，或代理所有者未知")
     declared_by_id = {item.agent_id: item for item in profiles.agents}
     for item in result["ranked"]:
         owner = members[declared_by_id[item["agent_id"]].owner_id]
         item["owner"] = owner.model_dump()
     result["note"] = (
         "能力和成本评分由成员填写；运行情况由调用者提供，工具无法独立认证来源或时效。"
-        "运行时在线只表示连接状态，不证明登录或额度可用。"
+        "机器并发仅统计快照中可见的代理；运行时在线不证明登录或额度可用。"
         "建议不会派发或保留名额；Git 作者信息不代表 GitHub 登录账号。"
     )
     return result
