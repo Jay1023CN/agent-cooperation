@@ -2204,6 +2204,32 @@ pre {
   background: #ffffff;
 }
 
+.network-panel {
+  margin-bottom: var(--space-5);
+}
+.network-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: 12px var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: var(--text-sm);
+  box-shadow: inset 3px 0 0 var(--state);
+}
+.network-row code {
+  padding: 2px 8px;
+  border-radius: 5px;
+  background: var(--surface-subtle);
+  font-size: 13px;
+  user-select: all;
+}
+.network-row .muted {
+  flex: 1;
+  min-width: 220px;
+}
 /* ---------- Command palette ---------- */
 .palette {
   width: min(600px, calc(100vw - 32px));

@@ -540,6 +540,25 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
     def me(request: Request):
         return identity(request)
 
+    @app.get("/api/setup/address")
+    def setup_address(request: Request):
+        """The HTTPS address other computers should use, as last published by `share`."""
+        identity(request)
+        from .network import saved
+
+        return saved(store.root) or {"state": "not_shared", "url": None, "message": "", "action_url": None}
+
+    @app.post("/api/setup/share")
+    def setup_share(request: Request):
+        """Publish this workspace with Tailscale Serve; only from the center computer itself."""
+        identity(request)
+        client = request.client.host if request.client else ""
+        if client not in {"127.0.0.1", "::1", "localhost"}:
+            raise HTTPException(403, "只能在中心那台电脑上开启共享")
+        from .network import share
+
+        return share(request.url.port or 8765, store.root)
+
     @app.get("/api/setup/center")
     def setup_center(request: Request):
         identity(request)

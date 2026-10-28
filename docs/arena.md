@@ -19,8 +19,10 @@ Windows 命令为 `.\pal-arena\pal-arena.exe serve`。打开 `http://127.0.0.1:8
 Mac mini 没有公网 IP 时，四台电脑加入同一 Tailscale 网络，Mac mini 执行：
 
 ```sh
-tailscale serve --bg http://127.0.0.1:8765
+pal-arena share
 ```
+
+它会调用 `tailscale serve`，并把得到的 HTTPS 地址显示在网页「电脑与成员」顶部；不会组网可以看 [组网指南](network.md)。
 
 其他电脑的 worker 使用返回的 HTTPS 地址；中心仍只监听回环地址。Tailscale 与 agent 的账号登录要在本机完成。源代码安装可作为备用路径，完整命令见 [源码安装](arena-delivery.md#源码安装备用路径)。
 

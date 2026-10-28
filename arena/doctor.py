@@ -9,6 +9,7 @@ import platform
 import shutil
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 
 
 def diagnose(config_path=None, *, probe_transport=True):
@@ -23,8 +24,11 @@ def diagnose(config_path=None, *, probe_transport=True):
             add(package, "ok", importlib.metadata.version(package))
         except importlib.metadata.PackageNotFoundError:
             add(package, "error", "Missing runtime package; reinstall the platform bundle")
+    from agent_link.device_setup import find_tailscale
+
     for name in ("git", "tailscale", "blender"):
-        found = bool(shutil.which(name))
+        # The Tailscale CLI often lives inside its app bundle or Program Files rather than on PATH.
+        found = bool(find_tailscale() if name == "tailscale" else shutil.which(name))
         note = {
             "git": "Required for code workspaces",
             "tailscale": "Optional for access between your computers",
@@ -79,6 +83,23 @@ def diagnose(config_path=None, *, probe_transport=True):
                 "ok" if writable and free >= config["storage_limit_bytes"] else "warning",
                 f"Free bytes: {free}; configured workspace budget: {config['storage_limit_bytes']}; writable: {writable}",
             )
+            host = (urlsplit(config["server"]).hostname or "").lower()
+            if probe_transport and (host.endswith(".ts.net") or host.startswith("100.")):
+                from agent_link.device_setup import inspect_device
+
+                network = inspect_device()["network"]["state"]
+                hints = {
+                    "connected": "This computer is on your Tailscale network",
+                    "not_installed": "Install Tailscale and sign in with the same account as the center",
+                    "login_required": "Open Tailscale and sign in with the same account as the center",
+                    "approval_required": "Approve this computer in the Tailscale admin console",
+                    "disconnected": "Open Tailscale and connect",
+                }
+                add(
+                    "network",
+                    "ok" if network == "connected" else "warning",
+                    hints.get(network, "Tailscale did not report a usable connection; open the app and retry"),
+                )
             if probe_transport:
                 import httpx
 

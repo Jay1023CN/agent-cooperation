@@ -83,16 +83,12 @@
 git clone https://github.com/Jay1023CN/agent-cooperation.git
 cd agent-cooperation
 python -m pip install .
-pal-arena serve
+pal-arena serve --share
 ```
 
-打开 `http://127.0.0.1:8765`，用 `~/.pal-arena/server/owner-token.txt` 里的令牌登录。中心默认只监听本机。
+打开 `http://127.0.0.1:8765`，用 `~/.pal-arena/server/owner-token.txt` 里的令牌登录。中心只监听本机。
 
-**2. 让其他电脑连得上。** 没有公网 IP 也没关系：所有电脑加入同一个 Tailscale 网络，然后在中心那台电脑上运行：
-
-```sh
-tailscale serve --bg http://127.0.0.1:8765
-```
+**2. 让其他电脑和伙伴连上。** 没有公网 IP、不会组网都没关系：每台电脑装上 Tailscale 并登录，`--share` 会自动给其他电脑一个 `https://…ts.net` 地址，网页「电脑与成员」顶部可以直接复制。第一次需要在 Tailscale 里点一次「启用 HTTPS」，命令会给你链接。一步一步的说明见 [组网指南](docs/network.md)。
 
 **3. 接入执行电脑。** 在调度台的「电脑与成员」里点「连接电脑」，生成这台电脑专用的令牌，勾选本机已安装的客户端，下载 `worker.json`。然后在那台电脑上（Windows PowerShell 用 `$env:ARENA_MACHINE_TOKEN = '...'`）：
 

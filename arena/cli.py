@@ -32,6 +32,12 @@ def main():
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8765)
     serve.add_argument("--quota-gb", type=float, default=5)
+    serve.add_argument(
+        "--share", action="store_true", help="Also publish this workspace to your Tailscale network over HTTPS"
+    )
+    share = sub.add_parser("share", help="Publish a running workspace to your Tailscale network over HTTPS")
+    share.add_argument("--port", type=int, default=8765)
+    share.add_argument("--data", default="~/.pal-arena/server")
     config = sub.add_parser("worker-config", help="Generate a machine configuration without launching agents")
     config.add_argument("--name", required=True)
     config.add_argument("--server", default="http://127.0.0.1:8765")
@@ -101,6 +107,14 @@ def main():
         else:
             print(serialized)
         return
+    if args.command == "share":
+        from .network import describe, share
+
+        result = share(args.port, Path(args.data).expanduser().resolve())
+        print(describe(result))
+        if result["state"] != "shared":
+            raise SystemExit(1)
+        return
     if args.quota_gb <= 0:
         parser.error("--quota-gb must be positive")
     try:
@@ -113,7 +127,12 @@ def main():
     app = create_app(root, quota=int(args.quota_gb * 1_000_000_000))
     print(f"PAL Arena: http://{args.host}:{args.port}")
     print(f'Owner login token is stored locally in {root / "owner-token.txt"}')
-    print("For remote computers, run Tailscale Serve against this local port.")
+    if args.share:
+        from .network import describe, share
+
+        print(describe(share(args.port, root)))
+    else:
+        print("Other computers: add --share, or run `pal-arena share` after Tailscale is signed in.")
     uvicorn.run(
         app,
         host=args.host,

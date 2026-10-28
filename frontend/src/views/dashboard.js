@@ -209,3 +209,19 @@ export function openAgent(id, state, openModal) {
     )}</strong></div></div>${agent.routing_profile && Object.keys(agent.routing_profile).length ? `<div class="detail-section"><h3>调度偏好</h3><pre>${e(JSON.stringify(agent.routing_profile, null, 2))}</pre></div>` : ''}<div class="notice">${e(r.reason || providerNote)}</div><div class="detail-section"><h3>在这台电脑上自检</h3><pre>pal-arena doctor --config worker.json</pre></div><div class="modal-actions"><button class="button" type="button" data-action="setup-help">接入指南</button><button class="button primary" type="button" data-action="close-modal">关闭</button></div>`,
   );
 }
+
+/** How other computers reach the center. Shared over Tailscale, or the steps to get there. */
+export function renderNetwork(address, { demo = false, local = false } = {}) {
+  const node = $('#network-panel');
+  if (demo) {
+    node.innerHTML =
+      '<div class="network-row status-done"><strong>其他电脑用这个地址</strong><code>https://mac-mini.tail1234.ts.net</code><span class="muted small">示例</span><button class="text-link" data-action="network-help">怎么组网</button></div>';
+    return;
+  }
+  if (address?.state === 'shared') {
+    node.innerHTML = `<div class="network-row status-done"><strong>其他电脑和伙伴用这个地址</strong><code>${e(address.url)}</code><button class="button small" data-action="copy-address" data-url="${e(address.url)}">复制</button><button class="text-link" data-action="network-help">怎么让伙伴也连上</button></div>`;
+    return;
+  }
+  const problem = address && address.state !== 'not_shared';
+  node.innerHTML = `<div class="network-row status-${problem ? 'blocked' : 'queued'}"><strong>${problem ? '共享没有完成' : '其他电脑还连不上这里'}</strong><span class="muted">${e(problem ? address.message : '中心只在本机可访问。用 Tailscale 组一个私有网络，不需要公网 IP，也不用设置路由器。')}</span>${address?.action_url ? `<a class="button small" href="${e(address.action_url)}" target="_blank" rel="noopener noreferrer">${address.state === 'not_installed' ? '下载 Tailscale' : '打开链接'}</a>` : ''}${local ? '<button class="button small primary" data-action="share-network">在这台电脑上开启共享</button>' : ''}<button class="text-link" data-action="network-help">一步一步怎么做</button></div>`;
+}

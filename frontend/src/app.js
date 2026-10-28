@@ -34,6 +34,7 @@ import {
   renderOverview,
   renderStats,
   renderAttention,
+  renderNetwork,
   renderFleet,
   renderAgents,
   openAgent,
@@ -65,6 +66,7 @@ let memoryScope = 'project';
 let memories = [];
 let memoryLoadSerial = 0;
 let unreadDrafts = new Map();
+let networkAddress = null;
 
 function toast(message, isError = false) {
   clearTimeout(toastTimer);
@@ -336,6 +338,27 @@ function navigate(view) {
   closeSidebar();
   writeRoute();
   if (view === 'memory') loadMemories(true).catch((error) => toast(error.message, true));
+  if (view === 'machines') loadNetwork();
+}
+const onCenter = () => ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+async function loadNetwork() {
+  if (demo) {
+    renderNetwork(null, { demo: true });
+    return;
+  }
+  try {
+    networkAddress = await api('/api/setup/address');
+  } catch {
+    networkAddress = null;
+  }
+  renderNetwork(networkAddress, { local: onCenter() });
+}
+function openNetworkHelp() {
+  openModal(
+    '让其他电脑和伙伴连上',
+    '不需要公网 IP，也不用动路由器。全程大约 10 分钟。',
+    `<ol class="setup-steps"><li><strong>每台电脑装上 Tailscale 并登录</strong><p>Mac 和 Windows 都从官网下载安装，打开后点登录。你自己的几台电脑用<strong>同一个账号</strong>登录（GitHub 账号就行），它们就自动在一个私有网络里了。</p><p><a href="https://tailscale.com/download" target="_blank" rel="noopener noreferrer">打开 Tailscale 下载页</a></p></li><li><strong>把伙伴拉进同一个网络</strong><p>在 Tailscale 网页后台打开「Users」→「Invite users」，把邀请链接发给伙伴。伙伴用自己的账号接受邀请，再在他的电脑上登录 Tailscale。</p></li><li><strong>在中心电脑上开启共享</strong><p>在常开的那台电脑（比如 Mac mini）上打开工作台，到「电脑与成员」点「在这台电脑上开启共享」，或者在终端运行：</p><pre>pal-arena share</pre><p>第一次会给你一个 Tailscale 链接，点进去按一次「启用」（打开 HTTPS），回来再点一次共享。</p></li><li><strong>把地址发给伙伴，连接其他电脑</strong><p>成功后会显示一个 <code>https://…ts.net</code> 地址。伙伴在浏览器打开它登录；你在「连接电脑」里生成配置时，这个地址会自动填进去。</p></li></ol><div class="notice">这个地址只有加入了你 Tailscale 网络的设备能打开，外人访问不到。在国内一般可以直接用；两台电脑直连不上时会自动经中继转发，速度慢一点，但这里只传任务、消息和日志，不影响使用。</div><div class="modal-actions">${onCenter() && !demo ? '<button class="button primary" type="button" data-action="share-network">在这台电脑上开启共享</button>' : ''}<button class="button" type="button" data-action="close-modal">关闭</button></div>`,
+  );
 }
 function openModal(title, subtitle, body, onSubmit) {
   modalGeneration += 1;
@@ -516,7 +539,7 @@ function openSetupHelp() {
   openModal(
     '连接前，先跑通这四步',
     '先连中心，再连电脑，最后验证实际任务。',
-    `<ol class="setup-steps"><li><strong>在一台常开的电脑上启动中心</strong><p>在安装好的环境运行：</p><pre>pal-arena serve</pre><p>首次访问用数据目录中的 <code>owner-token.txt</code> 登录。服务默认仅监听本机。</p></li><li><strong>给伙伴和其他电脑一个可访问的地址</strong><p>所有电脑加入同一 Tailscale 网络，在中心那台电脑上运行：</p><pre>tailscale serve --bg http://127.0.0.1:8765</pre><p>使用它给出的 HTTPS 地址访问工作台。其他电脑的配置里不能写 <code>localhost</code> 或 <code>127.0.0.1</code>。</p></li><li><strong>连接每台执行电脑</strong><p>在「电脑与成员」生成电脑专属令牌，选择本机客户端并下载配置。Mac 与 Windows 都在安装 PAL 的 Python 环境运行：</p><pre>pal-arena doctor --config worker.json\npal-arena-worker --config worker.json</pre><p>令牌放在 <code>ARENA_MACHINE_TOKEN</code> 环境变量中。自检通过不代表订阅额度或账号权限已通过实测。</p></li><li><strong>完成一次真实小任务</strong><p>先给负责人发一个只读检查任务，再在临时项目中写一个测试文件。核对任务结果、实际文件和独立验收；然后才扩大并发。</p></li></ol><div class="notice">Codex、Claude、Gemini 桌面应用不等于已安装可用的 CLI。Qoder 当前通过 ACP 新建会话；Antigravity 可连接桌面后端。GLM 等模型由你正在使用的客户端承载，填写对应客户端的模型 ID。模型名称和可用额度以各电脑实际情况为准。</div><div class="modal-actions"><button class="button primary" type="button" data-action="invite-machine">连接一台电脑</button><button class="button" type="button" data-action="close-modal">关闭</button></div>`,
+    `<ol class="setup-steps"><li><strong>在一台常开的电脑上启动中心</strong><p>在安装好的环境运行：</p><pre>pal-arena serve --share</pre><p>首次访问用数据目录中的 <code>owner-token.txt</code> 登录。服务只监听本机；<code>--share</code> 会通过 Tailscale 给其他电脑一个 HTTPS 地址。</p></li><li><strong>给伙伴和其他电脑一个可访问的地址</strong><p>没有公网 IP 也可以。每台电脑装好 Tailscale 并登录后，共享成功的地址会显示在「电脑与成员」顶部，连接电脑时自动填入。</p><p><button class="text-link" type="button" data-action="network-help">不会组网？看一步一步的说明</button></p></li><li><strong>连接每台执行电脑</strong><p>在「电脑与成员」生成电脑专属令牌，选择本机客户端并下载配置。Mac 与 Windows 都在安装 PAL 的 Python 环境运行：</p><pre>pal-arena doctor --config worker.json\npal-arena-worker --config worker.json</pre><p>令牌放在 <code>ARENA_MACHINE_TOKEN</code> 环境变量中。自检通过不代表订阅额度或账号权限已通过实测。</p></li><li><strong>完成一次真实小任务</strong><p>先给负责人发一个只读检查任务，再在临时项目中写一个测试文件。核对任务结果、实际文件和独立验收；然后才扩大并发。</p></li></ol><div class="notice">Codex、Claude、Gemini 桌面应用不等于已安装可用的 CLI。Qoder 当前通过 ACP 新建会话；Antigravity 可连接桌面后端。GLM 等模型由你正在使用的客户端承载，填写对应客户端的模型 ID。模型名称和可用额度以各电脑实际情况为准。</div><div class="modal-actions"><button class="button primary" type="button" data-action="invite-machine">连接一台电脑</button><button class="button" type="button" data-action="close-modal">关闭</button></div>`,
   );
 }
 function renderInviteResult(invite) {
@@ -524,7 +547,7 @@ function renderInviteResult(invite) {
   openModal(
     machine ? '连接执行电脑' : '邀请伙伴加入',
     `${invite.name} · 令牌仅在这里显示一次`,
-    `<p class="muted small">${machine ? '将令牌设置为执行电脑上的 ARENA_MACHINE_TOKEN 环境变量。不要放进项目仓库或聊天记录。' : '把专属令牌交给伙伴，用工作台登录页进入。'}</p><div class="token-box" id="invite-token"></div><div class="modal-actions"><button type="button" class="button" data-action="copy-token">${icon('copy')} 复制令牌</button></div>${machine ? machineSetupHTML(invite) : ''}<div class="modal-actions"><button class="button primary" type="button" data-action="close-modal">我已保存</button></div>`,
+    `<p class="muted small">${machine ? '将令牌设置为执行电脑上的 ARENA_MACHINE_TOKEN 环境变量。不要放进项目仓库或聊天记录。' : '把专属令牌交给伙伴，用工作台登录页进入。'}</p><div class="token-box" id="invite-token"></div><div class="modal-actions"><button type="button" class="button" data-action="copy-token">${icon('copy')} 复制令牌</button></div>${machine ? machineSetupHTML(invite, networkAddress) : ''}<div class="modal-actions"><button class="button primary" type="button" data-action="close-modal">我已保存</button></div>`,
   );
   dialogSecret = { ...invite };
   $('#invite-token').textContent = invite.token;
@@ -876,6 +899,7 @@ function paletteItems() {
     action('主题跟随系统', 'monitor', '', () => setTheme('system')),
     action('刷新', 'refresh', '', () => refresh(true)),
     action('接入指南', 'list', '', () => openSetupHelp()),
+    action('让其他电脑和伙伴连上（组网）', 'monitor', '', () => openNetworkHelp()),
     action('退出登录', 'logout', '', () => $('[data-action="logout"]').click()),
   ];
   const projects = state.projects.map((item) => ({
@@ -997,7 +1021,27 @@ document.addEventListener('click', async (event) => {
     else if (action === 'close-modal') closeModal();
     else if (action === 'project') await selectProject(button.dataset.id);
     else if (action === 'palette') palette.open();
-    else if (action === 'copy-pre') {
+    else if (action === 'network-help') openNetworkHelp();
+    else if (action === 'copy-address') {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(button.dataset.url);
+        toast('地址已复制，发给伙伴在浏览器里打开。');
+      } else toast(button.dataset.url);
+    } else if (action === 'share-network' && editable()) {
+      button.disabled = true;
+      try {
+        networkAddress = await post('/api/setup/share');
+      } finally {
+        button.disabled = false;
+      }
+      renderNetwork(networkAddress, { local: onCenter() });
+      if ($('#modal').open) closeModal();
+      navigate('machines');
+      toast(
+        networkAddress.state === 'shared' ? `已共享：${networkAddress.url}` : networkAddress.message,
+        networkAddress.state !== 'shared',
+      );
+    } else if (action === 'copy-pre') {
       const text = button.parentElement.querySelector('pre').textContent;
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(text);
