@@ -1,0 +1,27 @@
+name: Agent Link
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  contracts:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ['3.10', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install -e ".[platform]" pytest pytest-asyncio
+      - run: python -m pytest tests/test_agentlink_contracts.py tests/test_agentlink_tool.py tests/test_agentlink_multica.py tests/test_agentlink_acp_client.py tests/test_agentlink_assignment.py -q
+      - name: Arena orchestration and worker contracts
+        env:
+          PYTHONUTF8: '1'
+        run: python -m pytest tests/test_arena_store.py tests/test_arena_api.py tests/test_arena_worker.py tests/test_arena_release.py -q
+      - name: Path protection and shell regressions
+        env:
+          PYTHONUTF8: '1'
+        run: python -m pytest tests/test_file_protection.py tests/test_path_traversal_security.py tests/test_pip_detection_fix.py tests/test_utils.py -q

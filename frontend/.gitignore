@@ -1,0 +1,4 @@
+node_modules/
+.vite/
+!src/lib/
+!src/lib/*.js
