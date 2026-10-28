@@ -4,9 +4,8 @@
 
 <p align="center">
   <a href="https://github.com/Jay1023CN/agent-cooperation/releases"><img alt="Release" src="https://img.shields.io/github/v/release/Jay1023CN/agent-cooperation?style=flat-square&color=1f3a5f"></a>
-  <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-1f3a5f?style=flat-square">
   <a href="LICENSE"><img alt="Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-1f3a5f?style=flat-square"></a>
-  <img alt="不需要 API Key" src="https://img.shields.io/badge/API%20Key-%E4%B8%8D%E9%9C%80%E8%A6%81-2e7d4f?style=flat-square">
+  <img alt="macOS ARM64 / Windows x64" src="https://img.shields.io/badge/macOS%20ARM64%20%2F%20Windows%20x64-1f3a5f?style=flat-square">
   <img alt="自托管" src="https://img.shields.io/badge/%E9%83%A8%E7%BD%B2-%E8%87%AA%E6%89%98%E7%AE%A1-0b7a8c?style=flat-square">
 </p>
 
@@ -15,8 +14,9 @@
 </p>
 
 <p align="center">
-  <a href="#它怎么工作">它怎么工作</a> ·
-  <a href="#快速开始">快速开始</a> ·
+  <a href="https://github.com/Jay1023CN/agent-cooperation/releases/tag/v1.9.0">下载 v1.9.0</a> ·
+  <a href="#快速开始">开始使用</a> ·
+  <a href="#它怎么工作">协作流程</a> ·
   <a href="#能接入哪些客户端">客户端</a> ·
   <a href="#现在做到哪了">进度</a> ·
   <a href="#项目文档">文档</a>
@@ -24,19 +24,19 @@
 
 ---
 
-你手上有 Claude Code、Codex、Qoder、Antigravity、WorkBuddy……分散在家里和身边的几台 Mac、Windows 上。每个都能干活，但它们互相不认识：你得自己拆任务、自己复制粘贴上下文、自己记住谁做到哪了、自己检查它说的“做完了”是不是真的做完了。
+**把几台电脑上的 AI 编程客户端，组织成能分工、交接、独立验收的队伍。**
 
-> **一句话**：你说目标，负责人 AI 拆成带验收条件的任务，分给在线电脑上的 AI 成员，各自在独立 Git 分支里做，再由另一位成员独立验收。
-> 订阅用你已登录的，不要 API Key；自己部署，Tailscale 组网，不要公网 IP。
-> **状态：早期。** 流程和界面已做好，用假 CLI 和协议夹具测过；多台真机 + 真实订阅的端到端联调还在进行（见[现在做到哪了](#现在做到哪了)）。
+Claude Code、Codex、Qoder 各自能干活，拆任务、传上下文、核对结果却常常还得靠你。Agent Cooperation 把这些工作集中到一张调度台：你和伙伴说目标，负责人 AI 拆任务，在线电脑上的成员执行，再由另一位成员对照需求和证据验收。
 
-**Agent Cooperation 把这件事交给一张调度台。** 你和伙伴在团队频道里说目标，负责人把它拆成带验收条件的任务，分给在线电脑上合适的 AI 成员；每个任务在自己的 Git 分支里完成，再由**另一位成员**对照需求和证据独立验收，没通过就退回修订。全程用的是你们已经登录的客户端订阅，不需要任何模型 API Key。
+中心自托管，通过 Tailscale 连接其他电脑，无需公网 IP。执行端复用本机客户端及其登录态；DSH 等 harness 的模型、供应商与凭证由它自己的配置决定。
+
+> **当前版本：v1.9.0，仍处于早期。** Windows、Mac 原生包已发布并通过 CI 启动检查；多台真机与真实订阅的完整联调尚未完成。详见[验证状态](#现在做到哪了)。
 
 <table>
   <tr>
-    <td width="33%" valign="top"><b>🧭 一张调度台</b><br><sub>你和伙伴在团队频道说目标，负责人拆成带验收条件的任务，每次分派都写明理由。</sub></td>
-    <td width="33%" valign="top"><b>🔍 另一位成员验收</b><br><sub>执行者不能验收自己；没有结构化结论和证据不算通过，没过退回修订。</sub></td>
-    <td width="33%" valign="top"><b>🔐 自托管 · 不要 API Key</b><br><sub>用你已登录的客户端订阅；Tailscale 组网，不需要公网 IP。</sub></td>
+    <td width="33%" valign="top"><b>目标变成任务</b><br><sub>负责人写清依赖、文件范围和验收条件，调度记录每次分派的理由。</sub></td>
+    <td width="33%" valign="top"><b>按提交交接</b><br><sub>每个任务有独立 Git 分支，依赖固定到提交 SHA，日志与产物一起交回。</sub></td>
+    <td width="33%" valign="top"><b>独立验收</b><br><sub>另一位成员核对需求和证据；未通过退回修订，最多自动三次。</sub></td>
   </tr>
 </table>
 
@@ -45,7 +45,99 @@
   <img alt="调度台界面：任务管线、等你授权提醒、团队频道和各台电脑的执行位" src="docs/images/arena-preview-light.png">
 </picture>
 
-<sub>示例数据截图。顶部管线条按状态统计全部任务；“等你授权”可以直接点允许或拒绝；右栏「机位」是每台电脑一条轨道，正在跑的任务一格一格摆在上面，下面是排队任务和它在等什么。示例里是四台，实际接几台都行。</sub>
+<sub>调度台示例数据：任务管线、团队频道、授权请求，以及各台电脑正在执行和排队的任务。截图中的四台电脑仅为示例。</sub>
+
+## 最近更新
+
+- **DSH harness 接入（v1.9.0）**：通过 ACP 创建任务会话，支持自定义 profile、模型选择、权限转交与取消。模型留空时沿用 DSH profile，平台不注入 DeepSeek 官方模型配置。见 [DSH 接入说明](docs/dsh-harness.md)。
+- **任务运行记录**：在任务详情里查看执行与独立验收日志，向前翻页加载历史，有新记录时提示刷新。
+- **原生包交付**：Windows x64、macOS ARM64 和 Mac 安装助手已发布；GitHub 负责构建、启动检查、哈希校验和附件上传。
+
+[查看 v1.9.0 发布说明](https://github.com/Jay1023CN/agent-cooperation/releases/tag/v1.9.0) · [完整更新记录](CHANGELOG.md)
+
+## 快速开始
+
+### 1. 下载，启动中心
+
+选一台常开的电脑运行中心，其他电脑作为执行端接入。原生包已包含 Python 和网页，运行时无需另装 Python 或 Node.js；代码任务需要 Git，各执行端还需要相应的客户端。
+
+| 电脑 / 用途 | v1.9.0 下载 |
+| --- | --- |
+| Apple Silicon Mac mini 首次安装 | [Mac 安装助手](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.9.0/Mac-mini-Setup-v1.9.0.zip) |
+| Apple Silicon Mac 手动运行中心或 worker | [macOS ARM64 包](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.9.0/pal-arena-darwin-arm64-a1a8f6c9beb7.tar.gz) · [SHA-256](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.9.0/pal-arena-darwin-arm64-a1a8f6c9beb7.tar.gz.sha256) |
+| Intel / AMD Windows 电脑 | [Windows x64 包](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.9.0/pal-arena-windows-amd64-a1a8f6c9beb7.zip) · [SHA-256](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.9.0/pal-arena-windows-amd64-a1a8f6c9beb7.zip.sha256) |
+
+Mac 安装助手会下载并校验对应版本，配置当前用户登录时自动启动中心。手动安装时，按[交付指南](docs/arena-delivery.md#校验和解压)校验并完整解压，在包的最外层目录运行 `Start Server.command`（Mac）或 `Start Server.cmd`（Windows）。
+
+打开 `http://127.0.0.1:8765`，用 `~/.pal-arena/server/owner-token.txt` 里的令牌登录。Windows 的 `~` 对应当前用户目录。中心数据保存在程序目录之外，升级方式见[交付与升级](docs/arena-delivery.md#升级和回滚)。
+
+### 2. 连接其他电脑
+
+各台电脑安装并登录 Tailscale，在中心的「电脑与成员」页面开启共享，复制生成的 HTTPS 地址。也可以从包的最外层目录执行：
+
+```sh
+./pal-arena/pal-arena share
+```
+
+Windows 使用 `.\pal-arena\pal-arena.exe share`。首次启用 HTTPS 的步骤见[组网指南](docs/network.md)。中心仍只监听本机回环地址。
+
+### 3. 添加执行成员
+
+在「电脑与成员」里为每台电脑生成专属令牌，选择已安装并配置好的客户端，下载 `worker.json`。在那台电脑的原生包最外层目录运行：
+
+<details>
+<summary>Mac 终端命令</summary>
+
+```sh
+export ARENA_MACHINE_TOKEN='这台电脑的令牌'
+./pal-arena/pal-arena doctor --config worker.json
+./pal-arena/pal-arena worker --config worker.json
+```
+
+</details>
+
+<details>
+<summary>Windows PowerShell 命令</summary>
+
+```powershell
+$env:ARENA_MACHINE_TOKEN = '这台电脑的令牌'
+.\pal-arena\pal-arena.exe doctor --config worker.json
+.\pal-arena\pal-arena.exe worker --config worker.json
+```
+
+</details>
+
+`doctor` 不发送模型任务，检查通过也不代表账号或额度可用。先派一个小任务，核对结果、文件与独立验收，再增加成员和并发。令牌文件与后台运行方式见[工作机配置](docs/arena-delivery.md#安装检查和工作机)。
+
+<details>
+<summary>源码安装（Python 3.10+）</summary>
+
+```sh
+git clone https://github.com/Jay1023CN/agent-cooperation.git
+cd agent-cooperation
+```
+
+Mac / Linux：
+
+```sh
+python3 -m venv .venv
+./.venv/bin/python -m pip install -e '.[platform]'
+./.venv/bin/python -m arena serve
+```
+
+Windows PowerShell：
+
+```powershell
+py -3 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e '.[platform]'
+.\.venv\Scripts\python.exe -m arena serve
+```
+
+源码安装的执行端使用虚拟环境中的 `python -m arena.worker --config worker.json`。仓库已包含编译后的网页；仅修改前端时需要 Node.js，见[前端说明](frontend/README.md)。
+
+</details>
+
+只想先看界面：登录页点「不登录，先看示例」，或访问 `/?demo=1`。
 
 ## 它怎么工作
 
@@ -61,17 +153,6 @@
 5. **独立验收。** 验收成员和执行成员不能是同一个；没有结构化结论和证据，就不算通过。不通过退回修订，自动修订最多三次，之后停下来等人处理。
 6. **汇总交付。** 全部通过后负责人整合成果，交付必须对齐当前需求版本。合并、部署按项目策略来，比赛的最终提交仍由你们自己完成。
 
-## 和“多开几个 AI 窗口”有什么不同
-
-| | 手动多开 | Agent Cooperation |
-| --- | --- | --- |
-| 谁来拆任务 | 你 | 负责人，按需求清单拆，任务带验收条件 |
-| 谁做完了 | 靠它自己说 | 看提交、日志、产物，再由另一位成员验收 |
-| 断线或超时 | 不知道它到底执行没有 | 标记为“结果未知”，**绝不自动重发写操作**，等你确认现场 |
-| 代码交接 | 复制粘贴 | 每个任务一条分支，按提交 SHA 接力 |
-| 用量 | 各算各的 | 用已登录的订阅；额度查不到就显示“未知”，不假装知道 |
-| 需求变了 | 大家各记一版 | 需求有版本，旧验收自动失效 |
-
 ## 适合谁，不适合谁
 
 **适合**：手上有两台以上电脑、已经订了几个 AI 编程客户端、想让它们分工并行又不想自己当调度员的个人或小团队；想自托管、不想把代码和令牌交给第三方云。
@@ -84,13 +165,14 @@
 还有几条是刻意的：
 
 - **不假装在线。** 电脑在线、客户端装好了、订阅账号能用，是三个不同状态，界面分开显示。没接入的机器显示空状态，不拿示例数据充数。
+- **结果未知就停。** 断线或超时后，不自动重发结果不明的写操作；额度查不到就显示“未知”。
 - **记忆要人点头。** AI 提出的“记住这一点”先进待确认，成员批准后才会带进后续任务；每次运行都固定它用的那一版记忆。
 - **私聊就是私聊。** 个人对话、它的任务、日志和产物只给本人看，不能改共享需求，也不能确认共享交付。
 
 ## 用起来顺手的地方
 
 <details>
-<summary>展开看 8 个小细节</summary>
+<summary>展开查看快捷键、通知、GitHub 登录等日常操作</summary>
 
 - **`Ctrl K` / `⌘ K` 一个框走遍全部**：页面、项目、任务、操作（新建任务、连接电脑、切换频道、换主题……）都能搜到，回车执行。
 - **键盘就够了**：`N` 新建任务，`/` 直接给负责人发消息，`G` 再按 `C` `T` `R` `F` `M` 跳到对话、任务、验收、成果、电脑。
@@ -100,41 +182,9 @@
 - **装成应用**：浏览器地址栏里「安装」，就像一个独立 App，手机上也能「添加到主屏幕」。
 - **命令一键复制**：弹窗里所有命令和 ID 旁边都有「复制」。
 - **用 GitHub 登录，用你自己的账号推送**：配置一个 GitHub App 后，成员点「用 GitHub 登录」就能进来；项目设置里选一位成员，任务的提交和推送就以他的账号出现，哪台电脑执行都一样。见 [GitHub 登录](docs/github-login.md)。
+- **没有 GitHub App 也能配置推送**：在需要推送代码的电脑上运行 `pal-arena github login --member <成员 ID>`，连接该成员的 GitHub 账号。
 
 </details>
-
-</details>
-
-## 快速开始
-
-需要 Python 3.10+，并在每台电脑上先登录你打算用的客户端（Claude Code、Codex、Qoder 等）。
-
-**1. 在常开的那台电脑上启动中心**（比如 Mac mini）：
-
-```sh
-git clone https://github.com/Jay1023CN/agent-cooperation.git
-cd agent-cooperation
-python -m pip install .
-pal-arena serve --share
-```
-
-打开 `http://127.0.0.1:8765`，用 `~/.pal-arena/server/owner-token.txt` 里的令牌登录。中心只监听本机。
-
-**2. 让其他电脑和伙伴连上。** 没有公网 IP、不会组网都没关系：每台电脑装上 Tailscale 并登录，`--share` 会自动给其他电脑一个 `https://…ts.net` 地址，网页「电脑与成员」顶部可以直接复制。第一次需要在 Tailscale 里点一次「启用 HTTPS」，命令会给你链接。一步一步的说明见 [组网指南](docs/network.md)。
-
-**3. 接入执行电脑。** 在调度台的「电脑与成员」里点「连接电脑」，生成这台电脑专用的令牌，勾选本机已安装的客户端，下载 `worker.json`。然后在那台电脑上（Windows PowerShell 用 `$env:ARENA_MACHINE_TOKEN = '...'`）：
-
-```sh
-export ARENA_MACHINE_TOKEN='这台电脑的令牌'
-pal-arena doctor --config worker.json
-pal-arena-worker --config worker.json
-```
-
-`doctor` 只检查安装和本地连接，不会发模型请求，也不代表订阅额度没问题。第一次建议先派一个只读的小任务，确认结果、文件和验收都对得上，再加并发。
-
-想让提交显示为你本人：按 [GitHub 登录](docs/github-login.md) 建一个 GitHub App（约 5 分钟），之后在网页上点「连接 GitHub」一次；不想建 App，也可以在要推送代码的电脑上运行 `pal-arena github login --member <你的成员 ID>`。
-
-只想先看界面：登录页点「不登录，先看示例」，或者访问 `/?demo=1`。完整的安装、校验、升级步骤见 [交付指南](docs/arena-delivery.md)。
 
 ## 能接入哪些客户端
 
@@ -144,11 +194,14 @@ pal-arena-worker --config worker.json
 | Qoder / Qoder CN | ACP 新建会话 | 可用；不接管 IDE 里已打开的聊天 |
 | Antigravity | 本机桌面 RPC | 可用；可新建会话，也可接续指定的已有会话 |
 | OpenCode | 本机 HTTP 服务 | 可用 |
+| DeepSeek Harness（DSH） | ACP，新建任务会话，可指定自己的 profile | v1.9.0 新增；协议测试通过，真实模型路由待联调 |
 | WorkBuddy | 桌面 MCP，由已登录的桌面会话主动领取任务 | 原型；真实客户端待实机验证 |
 | GLM 等模型 | 由承载它的客户端选择 | 模型名本身不是可执行程序 |
 | Blender | 派给装了 Blender 的电脑，产出 `.blend` 和导出文件 | 专用适配待联调 |
 
 另外保留了上游 PAL 的 `clink` 工具和 [PAL Agent Link](docs/agent-link.md)：可以在任意 MCP 客户端里直接调用本机其他代理，也能为 [Multica](https://github.com/multica-ai/multica) 生成 MCP 配置。
+
+**DSH 接的是 harness。** 模型和供应商在 DSH 中配置，平台不写死 DeepSeek 官方模型。DSH 自带 ACP profile 有自己的初始路由，使用前需配置成你要用的路由；详见 [DSH 接入说明](docs/dsh-harness.md)。
 
 ## 现在做到哪了
 
@@ -161,11 +214,23 @@ pal-arena-worker --config worker.json
 - [x] 用成员本人的 GitHub 账号提交和推送，推送前后双重核对作者
 - [x] 用 GitHub 登录工作台；中心续期并按任务下发短期推送凭据
 - [x] 一条命令通过 Tailscale 共享中心，网页显示并自动填入地址
+- [x] 任务详情中的执行与独立验收日志、历史翻页与新记录提示
+- [x] DSH ACP 适配与自定义 profile 配置
+- [x] Windows x64 / macOS ARM64 原生包与 Mac 安装助手，GitHub 直接发布附件
 - [ ] 多台实机、真实订阅下的端到端联调
 - [ ] WorkBuddy 与 Multica 的状态回写
 - [ ] Blender 专用适配和可打开产物的自动检查
 
-测试用临时 Git 仓库、假 CLI 和协议夹具跑，不消耗真实订阅；它们替代不了实机验收，上面没打勾的项就是还没在真实设备上验证过。
+本版验证记录：
+
+| 验证项 | 结果与证据 |
+| --- | --- |
+| GitHub 全量测试 | [1,423 项通过，5 项跳过](https://github.com/Jay1023CN/agent-cooperation/actions/runs/40716957854) |
+| 跨平台契约测试 | [Windows / Linux / macOS × Python 3.10 / 3.12，六组通过](https://github.com/Jay1023CN/agent-cooperation/actions/runs/40716957810) |
+| 原生包构建与启动 | [Windows、Mac 两端通过，校验后直接发布](https://github.com/Jay1023CN/agent-cooperation/actions/runs/40717454716) |
+| 真实 Claude 桌面会话 | [已完成文档领取与回传](docs/claude-desktop-verification.md)；尚未实现自动唤醒 |
+
+自动化测试使用临时 Git 仓库、假 CLI 和协议夹具，不消耗真实订阅。DSH 真实模型、多机真实订阅的完整任务链路、WorkBuddy 桌面执行和 Blender 专用适配仍需实机联调。
 
 ## 项目结构
 
@@ -177,11 +242,20 @@ clink/ tools/  上游 PAL MCP 的 CLI 桥接与多模型工具
 docs/          说明文档
 ```
 
-改界面只需要动 `frontend/`，见 [前端说明](frontend/README.md)。
+中心与执行端使用 Python，中心 API 为 FastAPI，数据存储为 SQLite；网页是 Vite + 原生 JavaScript，原生包由 PyInstaller 构建。客户端按接口使用 CLI、ACP、MCP 或本机 HTTP / RPC。
+
+改界面从 `frontend/` 开始，见[前端说明](frontend/README.md)。
 
 ## 项目文档
 
-[调度台安装与运行](docs/arena.md) · [产品规格](docs/arena-product.md) · [交付与升级](docs/arena-delivery.md) · [维护与备份](docs/arena-maintenance.md) · [模型分配、记忆与代码交接](docs/arena-routing-memory.md) · [桌面交接](docs/desktop-handoff.md) · [跨电脑占用记录](docs/coordination.md) · [Agent Link](docs/agent-link.md) · [Multica 接入](docs/multica.md) · [整合方案](docs/multica-integration-plan.md) · [更新记录](CHANGELOG.md)
+| 想做什么 | 文档 |
+| --- | --- |
+| 安装、连接电脑、升级 | [安装与运行](docs/arena.md) · [交付与升级](docs/arena-delivery.md) · [Tailscale 组网](docs/network.md) |
+| 配置客户端与账号 | [DSH harness](docs/dsh-harness.md) · [Agent Link](docs/agent-link.md) · [GitHub 登录与推送](docs/github-login.md) |
+| 了解任务规则 | [产品规格](docs/arena-product.md) · [模型分配、记忆与代码交接](docs/arena-routing-memory.md) |
+| 维护、备份与恢复 | [维护文档](docs/arena-maintenance.md) · [跨电脑占用记录](docs/coordination.md) |
+| 桌面交接与 Multica | [桌面交接](docs/desktop-handoff.md) · [Multica 接入](docs/multica.md) · [整合方案](docs/multica-integration-plan.md) |
+| 查看版本变化 | [Release](https://github.com/Jay1023CN/agent-cooperation/releases) · [更新记录](CHANGELOG.md) |
 
 ## 来源与许可
 

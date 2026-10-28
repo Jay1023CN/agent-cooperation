@@ -4,9 +4,8 @@
 
 <p align="center">
   <a href="https://github.com/Jay1023CN/agent-cooperation/releases"><img alt="Release" src="https://img.shields.io/github/v/release/Jay1023CN/agent-cooperation?style=flat-square&color=1f3a5f"></a>
-  <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-1f3a5f?style=flat-square">
   <a href="LICENSE"><img alt="Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-1f3a5f?style=flat-square"></a>
-  <img alt="No API key" src="https://img.shields.io/badge/API%20key-not%20needed-2e7d4f?style=flat-square">
+  <img alt="macOS ARM64 / Windows x64" src="https://img.shields.io/badge/macOS%20ARM64%20%2F%20Windows%20x64-1f3a5f?style=flat-square">
   <img alt="Self-hosted" src="https://img.shields.io/badge/deploy-self--hosted-0b7a8c?style=flat-square">
 </p>
 
@@ -14,19 +13,30 @@
   <a href="README.md">简体中文</a> · <b>English</b>
 </p>
 
+<p align="center">
+  <a href="https://github.com/Jay1023CN/agent-cooperation/releases/tag/v1.9.0">Download v1.9.0</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#how-it-works">Workflow</a> ·
+  <a href="#supported-clients">Clients</a> ·
+  <a href="#what-works-today">Status</a> ·
+  <a href="#docs">Docs</a>
+</p>
+
 ---
 
-You have Claude Code, Codex, Qoder, Antigravity, WorkBuddy… spread across a few Macs and Windows PCs. Each one is good at its job, but none of them knows the others exist. You split the tasks, copy context between them, remember who is doing what, and check whether "done" is really done.
+**Turn the AI coding clients on your computers into a team that divides work, hands over code, and reviews each other's results.**
 
-**Agent Cooperation hands that job to a dispatch console.** You and your partners state a goal in the team channel. A lead AI turns it into tasks with acceptance criteria and assigns them to AI members on whichever of your computers are online. Each task runs on its own Git branch, then **a different member** reviews it against the requirements and the evidence; if it doesn't pass, it goes back for revision. It all runs on the client subscriptions you are already logged into. No model API keys.
+Claude Code, Codex and Qoder can each do the work. Splitting tasks, carrying context between them and checking the results often still falls to you. Agent Cooperation brings that work into one dispatch console: you and your partners state a goal, a lead AI creates tasks, members on connected computers execute them, and a different member reviews the requirements and evidence.
 
-> **Status: early.** The console, scheduling, Git handoff and review loop are built and tested with temporary Git repos, fake CLIs and protocol fixtures. A full end-to-end run across several real machines with real subscriptions is still in progress. See [What works today](#what-works-today).
+Run your own hub and connect computers through Tailscale, without a public IP. Workers use local clients and their existing sign-in state. Harnesses such as DSH retain their own model, provider and credential configuration.
+
+> **Current release: v1.9.0, early stage.** Windows and Mac packages are published and pass CI startup checks. A complete run across several real machines with real subscriptions is still pending. See [verification status](#what-works-today).
 
 <table>
   <tr>
-    <td width="33%" valign="top"><b>🧭 One dispatch console</b><br><sub>State a goal in the team channel; a lead splits it into tasks with acceptance criteria and records why each one is assigned.</sub></td>
-    <td width="33%" valign="top"><b>🔍 A different member reviews</b><br><sub>The worker can't review itself; no structured verdict and evidence means not passed, and it goes back for revision.</sub></td>
-    <td width="33%" valign="top"><b>🔐 Self-hosted, no API key</b><br><sub>Uses the client subscriptions you're already logged into; Tailscale networking, no public IP.</sub></td>
+    <td width="33%" valign="top"><b>Goals become tasks</b><br><sub>The lead records dependencies, file scope and acceptance criteria. Scheduling records why each task was assigned.</sub></td>
+    <td width="33%" valign="top"><b>Handoff by commit</b><br><sub>Each task has its own Git branch. Dependencies pin commit SHAs, with logs and artifacts returned alongside the work.</sub></td>
+    <td width="33%" valign="top"><b>Independent review</b><br><sub>A different member checks requirements and evidence. Rejected work returns for up to three automatic revisions.</sub></td>
   </tr>
 </table>
 
@@ -35,7 +45,95 @@ You have Claude Code, Codex, Qoder, Antigravity, WorkBuddy… spread across a fe
   <img alt="Dispatch console: task pipeline, approval prompt, team channel and per-computer lanes" src="docs/images/arena-preview-light.png">
 </picture>
 
-<sub>Demo data. The pipeline bar counts every task by state; "waiting for your approval" can be answered in place; the right column ("lanes") shows one lane per computer with running tasks laid out on it, and queued tasks below with what they are waiting for. The demo shows four computers; connect as many as you have.</sub>
+<sub>Demo data showing the task pipeline, team channel, approvals, and running or queued work on each computer. The four computers shown are examples.</sub>
+
+## Recent updates
+
+- **DSH harness support (v1.9.0):** ACP task sessions with custom profiles, model selection, permission requests and cancellation. Leaving the model blank uses the DSH profile; Agent Cooperation does not inject a DeepSeek official model configuration. See [DSH setup](docs/dsh-harness.md).
+- **Task history:** execution and independent-review logs in task details, with paginated history and a refresh prompt when new records arrive.
+- **Native delivery:** Windows x64, macOS ARM64 and a Mac setup helper are available. GitHub builds the packages, checks startup and hashes, and uploads release assets directly.
+
+[v1.9.0 release notes](https://github.com/Jay1023CN/agent-cooperation/releases/tag/v1.9.0) · [Full changelog](CHANGELOG.md)
+
+## Quick start
+
+### 1. Download and start the hub
+
+Use an always-on computer for the hub and connect other computers as workers. Native packages include Python and the compiled UI; running them needs no separate Python or Node.js installation. Code tasks need Git, and each worker needs its chosen clients installed and configured.
+
+| Computer / purpose | v1.9.0 download |
+| --- | --- |
+| First-time setup on an Apple Silicon Mac mini | [Mac setup helper](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.9.0/Mac-mini-Setup-v1.9.0.zip) |
+| Apple Silicon Mac, manual hub or worker setup | [macOS ARM64 package](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.9.0/pal-arena-darwin-arm64-a1a8f6c9beb7.tar.gz) · [SHA-256](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.9.0/pal-arena-darwin-arm64-a1a8f6c9beb7.tar.gz.sha256) |
+| Intel / AMD Windows PC | [Windows x64 package](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.9.0/pal-arena-windows-amd64-a1a8f6c9beb7.zip) · [SHA-256](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.9.0/pal-arena-windows-amd64-a1a8f6c9beb7.zip.sha256) |
+
+The Mac helper downloads and verifies the pinned package, then sets up the hub to start when the current user signs in. For manual setup, follow the [verification and extraction guide](docs/arena-delivery.md#校验和解压), keep the whole extracted directory, and run `Start Server.command` on Mac or `Start Server.cmd` on Windows from its outermost folder.
+
+Open `http://127.0.0.1:8765` and sign in with the token in `~/.pal-arena/server/owner-token.txt`. On Windows, `~` is your user directory. Hub data is stored outside the application folder; see [upgrades and rollback](docs/arena-delivery.md#升级和回滚).
+
+### 2. Connect the other computers
+
+Install Tailscale on each computer and sign in. Enable sharing in the hub's Computers & members page, then copy the HTTPS address. From the native package's outermost folder you can also run `./pal-arena/pal-arena share` on Mac or `.\pal-arena\pal-arena.exe share` on Windows. The [network guide](docs/network.md) covers first-time HTTPS setup. The hub continues to listen only on localhost.
+
+### 3. Add worker members
+
+In Computers & members, create a separate token for each computer, select installed and configured clients, and download `worker.json`. Run these commands in that computer's native package folder:
+
+<details>
+<summary>Mac terminal</summary>
+
+```sh
+export ARENA_MACHINE_TOKEN='this-computer-token'
+./pal-arena/pal-arena doctor --config worker.json
+./pal-arena/pal-arena worker --config worker.json
+```
+
+</details>
+
+<details>
+<summary>Windows PowerShell</summary>
+
+```powershell
+$env:ARENA_MACHINE_TOKEN = 'this-computer-token'
+.\pal-arena\pal-arena.exe doctor --config worker.json
+.\pal-arena\pal-arena.exe worker --config worker.json
+```
+
+</details>
+
+`doctor` sends no model tasks; a passing check does not confirm account access or quota. Start with a small task and check the result, files and independent review before adding concurrency. See [worker setup](docs/arena-delivery.md#安装检查和工作机) for token files and background services.
+
+To use your GitHub identity for commits and pushes, configure a GitHub App for web sign-in, or run `pal-arena github login --member <member ID>` on each computer that pushes code. See [GitHub sign-in](docs/github-login.md).
+
+<details>
+<summary>Install from source (Python 3.10+)</summary>
+
+```sh
+git clone https://github.com/Jay1023CN/agent-cooperation.git
+cd agent-cooperation
+```
+
+Mac / Linux:
+
+```sh
+python3 -m venv .venv
+./.venv/bin/python -m pip install -e '.[platform]'
+./.venv/bin/python -m arena serve
+```
+
+Windows PowerShell:
+
+```powershell
+py -3 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e '.[platform]'
+.\.venv\Scripts\python.exe -m arena serve
+```
+
+Source-installed workers use the virtual environment's `python -m arena.worker --config worker.json`. The repository includes the compiled UI; Node.js is needed only when editing the frontend. See the [frontend notes](frontend/README.md).
+
+</details>
+
+To look around first, choose the demo on the sign-in page or open `/?demo=1`.
 
 ## How it works
 
@@ -51,24 +149,17 @@ You have Claude Code, Codex, Qoder, Antigravity, WorkBuddy… spread across a fe
 5. **Independent review.** The reviewer cannot be the member who did the work. No structured verdict and no evidence means not passed. Failed tasks go back for revision, up to three automatic times, then stop and wait for a person.
 6. **Deliver.** When everything passes, the lead integrates the result, aligned with the current requirement version. Merging and deploying follow the project's policy.
 
-## Compared with "just open more AI windows"
-
-| | Manual | Agent Cooperation |
-| --- | --- | --- |
-| Who splits tasks | You | The lead, from the requirement list; tasks carry acceptance criteria |
-| Who says it's done | The agent itself | Commits, logs and artifacts, then another member reviews |
-| Disconnects / timeouts | You don't know if it ran | Marked "result unknown"; **write operations are never auto-resent** |
-| Code handoff | Copy and paste | One branch per task, handed over by commit SHA |
-| Usage | Everyone for themselves | Uses logged-in subscriptions; unknown quota is shown as "unknown" |
-| Requirement changes | Everyone remembers a different version | Versioned; older acceptance results are voided |
-
-A few more deliberate choices:
+## Working rules
 
 - **No pretending to be online.** A computer being online, a client being installed and a subscription being usable are three different states, shown separately. Machines that are not connected show an empty state, not demo data.
+- **Unknown outcomes stop writes.** A write with an uncertain result is not automatically resent after a timeout or disconnect. Unknown quota remains unknown.
 - **Memory needs a human.** "Remember this" proposals from the AI wait for a member's approval; every run pins the exact memory version it used.
 - **Private means private.** Personal chats, their tasks, logs and artifacts are visible only to that person and cannot change shared requirements or confirm shared deliveries.
 
 ## Day-to-day
+
+<details>
+<summary>Shortcuts, notifications, GitHub sign-in and everyday actions</summary>
 
 - **`Ctrl K` / `⌘ K` reaches everything**: pages, projects, tasks and actions (new task, connect a computer, switch channel, theme…) in one search box.
 - **Keyboard is enough**: `N` new task, `/` message the lead, `G` then `C` `T` `R` `F` `M` for chat, tasks, review, artifacts, computers.
@@ -77,37 +168,9 @@ A few more deliberate choices:
 - **Links are locations**: the address keeps the project, page and open task (`#/<project>/task/<task>`), so sharing, refreshing and bookmarking land in the same place.
 - **Install it as an app**: use "Install" in the browser address bar, or "Add to Home Screen" on a phone.
 - **Sign in with GitHub, push as yourself**: pick a member in project settings and task commits and pushes appear under their account, whichever computer ran the task.
+- **Copy commands and IDs** from dialogs using their copy buttons.
 
-## Quick start
-
-You need Python 3.10+, and each computer must already be logged into the clients you plan to use (Claude Code, Codex, Qoder, etc.).
-
-**1. Start the hub on an always-on computer** (say, a Mac mini):
-
-```sh
-git clone https://github.com/Jay1023CN/agent-cooperation.git
-cd agent-cooperation
-python -m pip install .
-pal-arena serve --share
-```
-
-Open `http://127.0.0.1:8765` and sign in with the token in `~/.pal-arena/server/owner-token.txt`. The hub only listens on localhost.
-
-**2. Connect the other computers and your partners.** No public IP and no networking expertise needed: install Tailscale on every computer and sign in. `--share` gives the others an `https://….ts.net` address, shown at the top of "Computers & members" with a copy button. The first time, click "Enable HTTPS" once in Tailscale; the command gives you the link. Step-by-step: [network guide](docs/network.md) (Chinese).
-
-**3. Connect a worker computer.** In the console go to "Computers & members", click "Connect a computer", generate a token for that machine, tick the clients installed there, and download `worker.json`. Then on that computer (Windows PowerShell: `$env:ARENA_MACHINE_TOKEN = '...'`):
-
-```sh
-export ARENA_MACHINE_TOKEN='this-computer-token'
-pal-arena doctor --config worker.json
-pal-arena-worker --config worker.json
-```
-
-`doctor` only checks installation and the local connection. It sends no model requests and does not mean your subscription quota is fine. Start with a small read-only task, check the result, files and review, then raise concurrency.
-
-To have commits appear under your own GitHub account, create a GitHub App once ([GitHub sign-in guide](docs/github-login.md), Chinese, about 5 minutes) and click "Connect GitHub" in the web UI. Every computer can then push as you. Without an App, run `pal-arena github login --member <your member ID>` on each computer that pushes code.
-
-Just want to look around? Click "Look at the demo without signing in" on the login page, or open `/?demo=1`.
+</details>
 
 ## Supported clients
 
@@ -117,11 +180,14 @@ Just want to look around? Click "Look at the demo without signing in" on the log
 | Qoder / Qoder CN | New session over ACP | Usable; does not take over chats already open in the IDE |
 | Antigravity | Local desktop RPC | Usable; can start a new session or continue a specified existing one |
 | OpenCode | Local HTTP service | Usable |
+| DeepSeek Harness (DSH) | ACP task sessions, with an optional custom profile | Added in v1.9.0; protocol tests pass, real model routes await testing |
 | WorkBuddy | Desktop MCP, the logged-in desktop session pulls tasks | Prototype; real client not yet verified on real machines |
 | GLM and other models | Chosen in whichever client hosts them | A model name is not an executable |
 | Blender | Assign to a computer with Blender; outputs `.blend` and exports | Dedicated adapter not yet integrated |
 
 The upstream PAL `clink` tool and [PAL Agent Link](docs/agent-link.md) are kept: call other local agents from any MCP client, or generate MCP configs for [Multica](https://github.com/multica-ai/multica).
+
+**DSH connects as a harness.** Configure models and providers in DSH; Agent Cooperation does not hardcode a DeepSeek official model. The bundled ACP profile has its own initial route, so configure it for your intended provider before use. See [DSH setup](docs/dsh-harness.md).
 
 ## What works today
 
@@ -134,11 +200,23 @@ The upstream PAL `clink` tool and [PAL Agent Link](docs/agent-link.md) are kept:
 - [x] Commit and push under a member's own GitHub account, with the author checked before and after the push
 - [x] Sign in with GitHub; the hub refreshes tokens and hands each task a short-lived push credential
 - [x] One-command Tailscale sharing for the hub, with the address shown and pre-filled in the web UI
+- [x] Paginated execution and review logs, with new-record notifications
+- [x] DSH ACP support and custom profile configuration
+- [x] Windows x64 / macOS ARM64 packages and a Mac helper, published directly from GitHub
 - [ ] End-to-end runs on several real machines with real subscriptions
 - [ ] WorkBuddy and Multica status write-back
 - [ ] Dedicated Blender adapter and automatic checks that artifacts open
 
-Tests use temporary Git repos, fake CLIs and protocol fixtures, and do not consume real subscriptions. They are no substitute for real-device acceptance: the unchecked items above have not been verified on real devices.
+Verification for this release:
+
+| Check | Result and evidence |
+| --- | --- |
+| Full GitHub test suite | [1,423 passed, 5 skipped](https://github.com/Jay1023CN/agent-cooperation/actions/runs/40716957854) |
+| Cross-platform contracts | [Windows / Linux / macOS × Python 3.10 / 3.12: all six passed](https://github.com/Jay1023CN/agent-cooperation/actions/runs/40716957810) |
+| Native builds and startup | [Both platforms passed; assets verified and published](https://github.com/Jay1023CN/agent-cooperation/actions/runs/40717454716) |
+| Existing Claude desktop session | [Document claim and return verified](docs/claude-desktop-verification.md); automatic wake-up is not implemented |
+
+Automated tests use temporary Git repositories, fake CLIs and protocol fixtures without consuming real subscriptions. Real DSH model routes, the complete multi-machine subscription workflow, WorkBuddy desktop execution and the dedicated Blender adapter still need device testing.
 
 ## Project layout
 
@@ -150,11 +228,20 @@ clink/ tools/  CLI bridge and multi-model tools from upstream PAL MCP
 docs/          documentation (mostly Chinese)
 ```
 
-To change the UI, only `frontend/` needs touching; see the [frontend notes](frontend/README.md).
+The hub and worker use Python, with FastAPI for the hub API and SQLite for storage. The frontend uses Vite and vanilla JavaScript; PyInstaller builds the native packages. Client connections use CLI, ACP, MCP, or local HTTP / RPC as appropriate.
+
+Start UI changes in `frontend/`; see the [frontend notes](frontend/README.md).
 
 ## Docs
 
-[Setup and running](docs/arena.md) · [Product spec](docs/arena-product.md) · [Delivery and upgrades](docs/arena-delivery.md) · [Maintenance and backups](docs/arena-maintenance.md) · [Routing, memory and code handoff](docs/arena-routing-memory.md) · [Desktop handoff](docs/desktop-handoff.md) · [Occupancy registry](docs/coordination.md) · [Agent Link](docs/agent-link.md) · [Multica](docs/multica.md) · [Changelog](CHANGELOG.md)
+| Goal | Documentation |
+| --- | --- |
+| Install, connect and upgrade | [Setup](docs/arena.md) · [Delivery and upgrades](docs/arena-delivery.md) · [Tailscale](docs/network.md) |
+| Configure clients and accounts | [DSH harness](docs/dsh-harness.md) · [Agent Link](docs/agent-link.md) · [GitHub sign-in](docs/github-login.md) |
+| Understand task rules | [Product spec](docs/arena-product.md) · [Routing, memory and handoff](docs/arena-routing-memory.md) |
+| Maintain and restore | [Maintenance and backups](docs/arena-maintenance.md) · [Occupancy registry](docs/coordination.md) |
+| Desktop handoff and Multica | [Desktop handoff](docs/desktop-handoff.md) · [Multica](docs/multica.md) · [Integration plan](docs/multica-integration-plan.md) |
+| Track releases | [Releases](https://github.com/Jay1023CN/agent-cooperation/releases) · [Changelog](CHANGELOG.md) |
 
 Most documentation is currently in Chinese; issues in English are welcome.
 
