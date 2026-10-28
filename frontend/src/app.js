@@ -602,6 +602,7 @@ const { openProject, openRequirements, openProjectSettings } = createProjectDial
   refresh,
   toast,
   isDemo: () => demo,
+  getState: () => state,
   onCreated: (id) => {
     currentProject = id;
     messageSignature = '';

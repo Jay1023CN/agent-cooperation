@@ -40,7 +40,10 @@ def stored(tmp_path):
         )
         owner = store.one('SELECT id FROM identities WHERE kind="member"')
         store.db.execute("INSERT INTO sessions VALUES(?,?,?)", (digest("old-session"), owner["id"], time.time() + 1000))
-        store.db.execute("INSERT INTO machines VALUES(?,?,?,?,?,?)", (uid(), "Mac mini", "macOS", time.time(), 2, 0))
+        store.db.execute(
+            "INSERT INTO machines(id,name,os,seen,slots,storage_bytes) VALUES(?,?,?,?,?,?)",
+            (uid(), "Mac mini", "macOS", time.time(), 2, 0),
+        )
     yield {
         "store": store,
         "root": store.root,

@@ -55,6 +55,10 @@ class GitHubAccounts:
             )
         return {"member_id": member_id, **identity}
 
+    def members(self) -> list[str]:
+        with closing(sqlite3.connect(self.path)) as conn, conn:
+            return [row[0] for row in conn.execute("SELECT member_id FROM member_github_accounts ORDER BY member_id")]
+
     def resolve(self, member_id: str, *, gh: str = "gh") -> dict:
         """Recheck which account is active in the bound profile before using it."""
         with closing(sqlite3.connect(self.path)) as conn, conn:

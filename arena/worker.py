@@ -29,7 +29,10 @@ import psutil
 from agent_link.acp import ACP
 from agent_link.common import BridgeError
 from agent_link.discovery import antigravity_services, opencode_service, qoder_command
+from agent_link.github_identity import GitHubIdentityError
 from agent_link.server import Agents
+
+from . import github as github_accounts
 
 CLI_PROVIDERS = {"codex", "claude", "gemini"}
 PAL_PROVIDERS = set(Agents.names)
@@ -553,13 +556,23 @@ def run_process(command, cwd, env=None, stdin="", timeout=1800, cancel=None, on_
                 stream.close()
 
 
-def git(command, cwd, cancel=None):
-    env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
+def git(command, cwd, cancel=None, env=None):
+    env = dict(env or os.environ, GIT_TERMINAL_PROMPT="0")
     env.pop("ARENA_MACHINE_TOKEN", None)
     # Git for Windows otherwise fails to create refs and logs below deep task
     # directories even when Python can access the workspace itself.
     output = run_process(["git", "-c", "core.longpaths=true", *command], cwd, env=env, timeout=180, cancel=cancel)
     return output if "-z" in command else output.strip()
+
+
+def commit_message(job, agent, machine_name):
+    """Say which task, AI member and computer produced the commit, since the author is the human member."""
+    title = " ".join(str(job["task"].get("title") or "Complete Arena task").split())[:120]
+    name = agent.get("name") or agent.get("key") or "agent"
+    return (
+        f"{title}\n\nArena-Task: {job['task'].get('id', '')}\n"
+        f"Arena-Agent: {name} ({agent.get('provider', 'unknown')})\nArena-Machine: {machine_name}"
+    )
 
 
 def local_source(evidence, root: Path, machine_id: str) -> Path | None:
@@ -778,7 +791,19 @@ def check_capture_credentials(path, original, cancel=None):
                     inspect(chunk.decode("utf-8", errors="replace"))
 
 
-def capture_git(path, branch, project, cancel=None, base_commit=None, required_commits=(), checkpoint=None):
+def capture_git(
+    path,
+    branch,
+    project,
+    cancel=None,
+    base_commit=None,
+    required_commits=(),
+    checkpoint=None,
+    identity=None,
+    message="Complete Arena task",
+):
+    """Commit and optionally push a task branch; identity is (git env, public member identity) or None."""
+    git_env, member = identity or (None, None)
     if branch is None:
         if git(["diff", "HEAD", "--name-only"], path, cancel):
             raise WorkerError("Reviewer modified tracked source files; review cannot be accepted")
@@ -792,9 +817,9 @@ def capture_git(path, branch, project, cancel=None, base_commit=None, required_c
     with exclude.open("a", encoding="utf-8") as ignore:
         ignore.write("\narena-exports/\n.arena-inputs/\n")
     check_capture_credentials(path, original, cancel)
-    git(["add", "-A"], path, cancel)
+    git(["add", "-A"], path, cancel, env=git_env)
     if git(["diff", "--cached", "--name-only"], path, cancel) or (path / ".git" / "MERGE_HEAD").is_file():
-        git(["commit", "-m", "Complete Arena task"], path, cancel)
+        git(["commit", "-m", message], path, cancel, env=git_env)
     commit = git(["rev-parse", "HEAD"], path, cancel)
     evidence = {
         "branch": branch,
@@ -803,6 +828,19 @@ def capture_git(path, branch, project, cancel=None, base_commit=None, required_c
         "diff_stat": git(["diff", "--stat", original, commit], path, cancel)[-12000:],
         "delivery": "local",
     }
+    if member:
+        # Every commit this task adds must carry the member's identity before anything is pushed as them.
+        authors = git(
+            ["log", "--format=%ae%x00%ce", "--no-merges", original + "..HEAD", "--not", *required_commits, "--"],
+            path,
+            cancel,
+        )
+        if any(set(line.split("\0")) != {member["git_email"]} for line in authors.splitlines() if line):
+            raise WorkerError(
+                "A task commit is not authored as the project's GitHub member; branch was not published",
+                evidence=evidence,
+            )
+        evidence["commit_identity"] = {key: member[key] for key in ("member_id", "github_login", "git_email")}
     for dependency in required_commits:
         try:
             git(["merge-base", "--is-ancestor", dependency, commit], path, cancel)
@@ -816,7 +854,7 @@ def capture_git(path, branch, project, cancel=None, base_commit=None, required_c
         if checkpoint:
             checkpoint(evidence)
         try:
-            git(["push", "--porcelain", "origin", "HEAD:refs/heads/" + branch], path, cancel)
+            git(["push", "--porcelain", "origin", "HEAD:refs/heads/" + branch], path, cancel, env=git_env)
         except WorkerError as exc:
             evidence["push_status"] = "unconfirmed"
             error_type = RunCancelled if isinstance(exc, RunCancelled) else WorkerError
@@ -1360,6 +1398,15 @@ class Worker:
         self.desktop_locks = {}
         self.desktop_bridge = desktop_bridge
         self.last_registration = 0
+        self.github_checked = (float("-inf"), [])
+
+    def github_members(self):
+        """Re-verify bound GitHub logins at most every five minutes; registration repeats every 30 seconds."""
+        checked_at, members = self.github_checked
+        if time.monotonic() - checked_at >= 300:
+            members = github_accounts.verified_members(self.config)
+            self.github_checked = (time.monotonic(), members)
+        return members
 
     def register(self):
         rows = []
@@ -1405,6 +1452,7 @@ class Worker:
                 "slots": self.config["slots"],
                 "agents": rows,
                 "storage_bytes": directory_size(self.root),
+                "github_members": self.github_members(),
             },
         )
         self.machine_id = response["machine_id"]
@@ -1560,6 +1608,12 @@ class Worker:
                 required_commits = [dependency["evidence"]["commit"] for dependency in job.get("dependencies", [])]
             evidence["workspace"] = str(path)
             initial_commit = git(["rev-parse", "HEAD"], path, cancelled)
+            commit_identity = None
+            if job.get("commit_identity"):
+                try:
+                    commit_identity = github_accounts.commit_environment(self.config, job["commit_identity"])
+                except GitHubIdentityError as exc:
+                    raise WorkerError(f"Member GitHub login is unavailable on this computer: {exc}") from exc
             env = {
                 k: v
                 for k, v in os.environ.items()
@@ -1578,6 +1632,8 @@ class Worker:
                 ARENA_ALLOW_HTTP="1" if self.config.get("allow_http") else "0",
                 PYTHONUTF8="1",
             )
+            if commit_identity:
+                env.update(github_accounts.author_environment(commit_identity[1]))
             inputs = materialize_artifacts(job, path, api, cancelled)
             job = {**job, "context": api.request("GET", "/api/runs/context"), "input_artifacts": inputs}
             prompt = task_prompt(job, desktop=agent["provider"] == "desktop_mcp")
@@ -1621,6 +1677,8 @@ class Worker:
                     base_commit=initial_commit,
                     required_commits=required_commits,
                     checkpoint=checkpoint,
+                    identity=commit_identity,
+                    message=commit_message(job, agent, self.config.get("name", "")),
                 )
             )
             evidence["artifacts"] = collect_artifacts(artifact_workspace, job["project"]["id"], api)

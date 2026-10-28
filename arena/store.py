@@ -94,6 +94,8 @@ class Store:
             self.db.execute("ALTER TABLE tasks ADD COLUMN channel TEXT NOT NULL DEFAULT 'shared'")
         for table, additions in {
             "agents": {"readiness": "TEXT NOT NULL DEFAULT '{}'", "routing_profile": "TEXT NOT NULL DEFAULT '{}'"},
+            # Members whose GitHub login this machine verified at registration (no credentials).
+            "machines": {"github_members": "TEXT NOT NULL DEFAULT '[]'"},
             "tasks": {
                 "difficulty": "TEXT NOT NULL DEFAULT 'standard'",
                 "context_tokens": "INTEGER NOT NULL DEFAULT 0",
@@ -421,6 +423,10 @@ class Store:
             machines = self.all("SELECT * FROM machines ORDER BY name")
             for m in machines:
                 m["online"] = m["seen"] > time.time() - 45
+                m["github_members"] = [
+                    {"member_id": item["member_id"], "github_login": item["github_login"]}
+                    for item in json.loads(m["github_members"])
+                ]
             agents = self.all("SELECT * FROM agents ORDER BY preference,name")
             for a in agents:
                 a["roles"] = json.loads(a["roles"])
@@ -493,11 +499,12 @@ class Store:
         for project_id, channel in affected:
             self.reconcile(project_id, channel)
 
-    def register(self, machine_id, name, os_name, slots, agents, storage_bytes=0):
+    def register(self, machine_id, name, os_name, slots, agents, storage_bytes=0, github_members=()):
         self.db.execute(
-            "INSERT INTO machines VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET "
-            "name=excluded.name,os=excluded.os,seen=excluded.seen,slots=excluded.slots,storage_bytes=excluded.storage_bytes",
-            (machine_id, name, os_name, time.time(), slots, storage_bytes),
+            "INSERT INTO machines(id,name,os,seen,slots,storage_bytes,github_members) VALUES(?,?,?,?,?,?,?) "
+            "ON CONFLICT(id) DO UPDATE SET name=excluded.name,os=excluded.os,seen=excluded.seen,"
+            "slots=excluded.slots,storage_bytes=excluded.storage_bytes,github_members=excluded.github_members",
+            (machine_id, name, os_name, time.time(), slots, storage_bytes, encoded(list(github_members))),
         )
         self.db.execute("UPDATE agents SET enabled=0 WHERE machine_id=?", (machine_id,))
         for a in agents:
@@ -587,12 +594,14 @@ class Store:
                 continue
             # Pick globally so cost preference is independent of polling order.
             candidates = self.all(
-                "SELECT a.* FROM agents a JOIN machines m ON m.id=a.machine_id "
-                "WHERE a.enabled=1 AND m.seen>? ORDER BY a.preference,a.id",
+                "SELECT a.*,m.github_members AS machine_github_members FROM agents a JOIN machines m "
+                "ON m.id=a.machine_id WHERE a.enabled=1 AND m.seen>? ORDER BY a.preference,a.id",
                 (time.time() - 45,),
             )
             chosen, chosen_score, reason = None, float("-inf"), ""
             project = self.project(t["project_id"])
+            # Commits and pushes under a member's GitHub account can only happen where that member logged in.
+            commit_as = project["policy"].get("commit_as") if t["kind"] in ("worker", "leader") else ""
             # Commit availability is a hard constraint, independent of model quality.
             if t["source_id"]:
                 inputs = [self.task(t["source_id"])["evidence"]]
@@ -615,6 +624,10 @@ class Store:
                 if t["requested_agent"] and a["id"] != t["requested_agent"]:
                     continue
                 if any(e.get("machine_id") != a["machine_id"] for e in local_inputs):
+                    continue
+                if commit_as and not any(
+                    item["member_id"] == commit_as for item in json.loads(a["machine_github_members"])
+                ):
                     continue
                 if t["capability"] not in json.loads(a["capabilities"]) and t["kind"] in (
                     "worker",
@@ -649,7 +662,16 @@ class Store:
                     waiting = (
                         "等待可读取本地提交的同机成员；跨电脑协作需先同步工作分支到 GitHub。"
                         if local_inputs
-                        else "暂无同时满足角色、能力、接入状态、并发和模型偏好的可用成员。"
+                        else (
+                            "项目要求以成员的 GitHub 身份提交；先在执行电脑上运行 pal-arena github login 绑定该成员。"
+                            if commit_as
+                            and not any(
+                                item["member_id"] == commit_as
+                                for a in candidates
+                                for item in json.loads(a["machine_github_members"])
+                            )
+                            else "暂无同时满足角色、能力、接入状态、并发和模型偏好的可用成员。"
+                        )
                     )
                     self.db.execute("UPDATE tasks SET routing_reason=? WHERE id=?", (waiting, t["id"]))
                 continue
@@ -673,10 +695,16 @@ class Store:
                 (chosen["id"], digest(token), digest(agent_token), time.time() + 90, time.time(), t["id"]),
             )
             self.event(t["project_id"], t["id"], "running", f'{chosen["name"]} 已领取任务')
+            bound = {item["member_id"]: item for item in json.loads(chosen.pop("machine_github_members"))}
             return {
                 "task": self.public_task(self.task(t["id"])),
                 "project": self.project(t["project_id"]),
                 "agent": chosen,
+                "commit_identity": (
+                    {key: bound[commit_as][key] for key in ("member_id", "github_id", "github_login")}
+                    if commit_as
+                    else None
+                ),
                 "run_token": token,
                 "agent_token": agent_token,
                 "source": self.public_task(self.task(t["source_id"])) if t["source_id"] else None,
@@ -698,6 +726,11 @@ class Store:
     def complete(self, token, result, evidence, failed=False):
         t = self.active_run(token, worker_only=True)
         p = self.project(t["project_id"])
+        commit_as = p["policy"].get("commit_as")
+        if not failed and commit_as and t["kind"] in ("worker", "leader") and evidence.get("branch"):
+            if (evidence.get("commit_identity") or {}).get("member_id") != commit_as:
+                failed = True
+                result += "\n提交未使用项目指定成员的 GitHub 身份，成果未被接受。"
         state = "failed" if failed else "done"
         if not failed and t["revision"] != p["revision"]:
             state = "changes_requested"

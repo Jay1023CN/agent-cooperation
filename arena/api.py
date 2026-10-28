@@ -43,6 +43,8 @@ class Policy(Input):
     release_profile: str = Field(default="", max_length=80, pattern=r"^[A-Za-z0-9._-]*$")
     routing: Literal["balanced", "quality", "economy"] = "balanced"
     preferred_providers: list[Short] = Field(default_factory=list, max_length=30)
+    # Workspace member whose GitHub account authors and pushes task commits; empty keeps machine Git settings.
+    commit_as: str = Field(default="", max_length=64, pattern=r"^[a-f0-9]*$")
 
     @model_validator(mode="after")
     def require_release_executor(self):
@@ -159,12 +161,26 @@ class Agent(Input):
     routing_profile: RoutingProfile = Field(default_factory=RoutingProfile)
 
 
+class GitHubMember(Input):
+    member_id: str = Field(min_length=1, max_length=64, pattern=r"^[a-f0-9]+$")
+    github_id: int = Field(ge=1)
+    github_login: str = Field(min_length=1, max_length=39, pattern=r"^[A-Za-z0-9-]+$")
+
+
 class Registration(Input):
     name: Short
     os: Short
     slots: int = Field(default=1, ge=1, le=16)
     agents: list[Agent] = Field(default_factory=list, max_length=32)
     storage_bytes: int = Field(default=0, ge=0)
+    github_members: list[GitHubMember] = Field(default_factory=list, max_length=16)
+
+    @field_validator("github_members")
+    @classmethod
+    def distinct_members(cls, value):
+        if len({item.member_id for item in value}) != len(value):
+            raise ValueError("每位成员在一台电脑上只能绑定一个 GitHub 账号")
+        return value
 
     @field_validator("agents")
     @classmethod
@@ -666,11 +682,21 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
         snapshot["projects"] = [project_view(project) for project in snapshot["projects"]]
         return snapshot
 
+    def check_commit_identity(policy: dict):
+        member = policy.get("commit_as")
+        if member and not store.one(
+            'SELECT i.id FROM identities i WHERE i.id=? AND i.kind="member" AND NOT EXISTS '
+            "(SELECT 1 FROM identity_revocations r WHERE r.identity_id=i.id)",
+            (member,),
+        ):
+            raise HTTPException(422, "提交身份必须是工作台中仍有效的成员")
+
     @app.post("/api/projects", status_code=201)
     def project_create(data: Project, request: Request):
         project_id = uid()
         with store.tx():
             identity(request)
+            check_commit_identity(data.policy.model_dump())
             store.db.execute(
                 "INSERT INTO projects(id,name,brief,repo,base_ref,requirements,policy,status,created) "
                 "VALUES(?,?,?,?,?,?,?,?,?)",
@@ -706,6 +732,7 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
             except ValidationError as exc:
                 raise HTTPException(422, exc.errors(include_context=False)) from exc
             final = checked.model_dump()
+            check_commit_identity(final["policy"])
             if all(previous[key] == value for key, value in final.items()):
                 return previous
             if (
@@ -1034,6 +1061,7 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
                 data.slots,
                 [a.model_dump(exclude_none=True) for a in data.agents],
                 data.storage_bytes,
+                [item.model_dump() for item in data.github_members],
             )
         return {"machine_id": actor["id"], "agents": agents}
 

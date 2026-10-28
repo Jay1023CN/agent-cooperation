@@ -14,6 +14,11 @@ def main():
         sys.argv.pop(1)
         workspaces_main()
         return
+    if len(sys.argv) > 1 and sys.argv[1] == "github":
+        from .github import main as github_main
+
+        github_main(sys.argv[2:])
+        return
     if len(sys.argv) > 1 and sys.argv[1] == "maintenance":
         from .maintenance import main as maintenance_main
 
@@ -39,6 +44,7 @@ def main():
     doctor.add_argument("--no-network", action="store_true", help="Skip local transport and server probes")
     sub.add_parser("maintenance", help="Backup, restore, and generate startup services")
     sub.add_parser("workspaces", help="Inspect or clean verified, synchronized workspaces")
+    sub.add_parser("github", help="Connect a member's GitHub account so task commits are pushed as them")
     args = parser.parse_args()
     if args.command == "doctor":
         from .doctor import diagnose, render
