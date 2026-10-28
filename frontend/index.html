@@ -7,9 +7,9 @@
     <meta name="theme-color" content="#ffffff" />
     <meta
       name="description"
-      content="PAL Arena，和伙伴一起组织电脑与 AI 成员，把想法变成可验收的比赛作品。"
+      content="Agent Cooperation，和伙伴一起组织电脑与 AI 成员，把想法变成可验收的作品。"
     />
-    <title>PAL Arena · 比赛工作台</title>
+    <title>Agent Cooperation · 协作工作台</title>
     <link
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%23b6a4ff'/%3E%3Cpath d='M17 45 28 18h9L48 45H37l-5-16-5 16Z' fill='%2316171c'/%3E%3C/svg%3E"
@@ -26,7 +26,7 @@
     <section id="login-screen" class="login-screen" hidden>
       <div class="login-panel">
         <a class="brand" href="/"
-          ><span class="brand-symbol">P</span><span>PAL <strong>Arena</strong></span></a
+          ><span class="brand-symbol">A</span><span>Agent <strong>Cooperation</strong></span></a
         >
         <p class="eyebrow">团队开发空间</p>
         <h1>一起，把作品做出来。</h1>
@@ -55,31 +55,21 @@
     <div id="app" class="app" hidden>
       <aside class="sidebar" id="sidebar">
         <a class="brand" href="/"
-          ><span class="brand-symbol">P</span><span>PAL <strong>Arena</strong></span></a
+          ><span class="brand-symbol">A</span><span>Agent <strong>Cooperation</strong></span></a
         >
         <button class="workspace-switch" data-action="navigate" data-view="chat">
-          <span class="workspace-icon">P</span><span>我们的比赛空间<small>你的电脑 · 你的团队</small></span
+          <span class="workspace-icon">A</span><span>协作空间<small>和负责人一起推进</small></span
           ><span class="muted" aria-hidden="true">⌄</span>
         </button>
         <nav class="main-nav" aria-label="主导航">
           <button data-action="navigate" data-view="chat" class="nav-item active">
-            <span data-icon="chat"></span>协作空间
+            <span data-icon="chat"></span>项目对话
           </button>
           <button data-action="navigate" data-view="tasks" class="nav-item">
-            <span data-icon="board"></span>任务看板<span id="task-nav-count" class="nav-count">0</span>
-          </button>
-          <button data-action="navigate" data-view="review" class="nav-item">
-            <span data-icon="check"></span>独立验收<span id="review-nav-count" class="nav-count">0</span>
+            <span data-icon="board"></span>任务进度<span id="task-nav-count" class="nav-count">0</span>
           </button>
           <button data-action="navigate" data-view="files" class="nav-item">
             <span data-icon="folder"></span>成果与文件
-          </button>
-          <button data-action="navigate" data-view="machines" class="nav-item">
-            <span data-icon="monitor"></span>执行电脑与成员</button
-          ><button data-action="navigate" data-view="memory" class="nav-item">
-            <span data-icon="spark"></span>记忆与偏好</button
-          ><button data-action="navigate" data-view="logs" class="nav-item">
-            <span data-icon="terminal"></span>运行记录
           </button>
         </nav>
         <div class="sidebar-section-heading">
@@ -90,12 +80,26 @@
         </div>
         <div id="project-list" class="project-list"></div>
         <div class="sidebar-spacer"></div>
-        <div class="storage-card" id="sidebar-storage"></div>
-        <button class="nav-item" data-action="team">
-          <span data-icon="users"></span>伙伴与电脑<span aria-hidden="true">↗</span></button
-        ><button class="nav-item" data-action="setup-help">
-          <span data-icon="list"></span>接入与自检指南
-        </button>
+        <details class="sidebar-more">
+          <summary>管理与设置</summary>
+          <button data-action="navigate" data-view="review" class="nav-item">
+            <span data-icon="check"></span>独立验收<span id="review-nav-count" class="nav-count">0</span>
+          </button>
+          <button data-action="navigate" data-view="machines" class="nav-item">
+            <span data-icon="monitor"></span>电脑与 AI 成员
+          </button>
+          <button data-action="navigate" data-view="memory" class="nav-item">
+            <span data-icon="spark"></span>记忆与偏好
+          </button>
+          <button data-action="navigate" data-view="logs" class="nav-item">
+            <span data-icon="terminal"></span>运行记录
+          </button>
+          <button class="nav-item" data-action="team"><span data-icon="users"></span>伙伴与电脑</button>
+          <button class="nav-item" data-action="setup-help">
+            <span data-icon="list"></span>接入与自检指南
+          </button>
+          <div class="storage-card" id="sidebar-storage"></div>
+        </details>
         <div class="user-row">
           <span class="user-avatar" id="user-avatar">Y</span>
           <div><strong id="user-name">你的空间</strong><small>一起，把作品做出来</small></div>
@@ -105,7 +109,7 @@
         </div>
       </aside>
 
-      <main class="main">
+      <main class="main" data-view="chat">
         <header class="topbar">
           <div class="breadcrumb">
             <button class="icon-button mobile-menu" data-action="menu" aria-label="展开导航">
@@ -170,7 +174,10 @@
             </div>
             <div id="view-chat" class="view-panel chat-panel">
               <div class="chat-heading">
-                <div><span class="small-dot"></span><strong>和负责人一起推进</strong></div>
+                <div class="lead-heading">
+                  <span class="lead-avatar" data-icon="spark"></span
+                  ><span><strong>项目负责人</strong><small>和负责人聊想法、看进展</small></span>
+                </div>
                 <div class="segmented">
                   <button class="active" data-action="channel" data-channel="shared">团队共享</button
                   ><button data-action="channel" data-channel="personal">个人对话</button>
@@ -196,7 +203,7 @@
                   </button>
                 </div>
               </form>
-              <p class="composer-footnote">Shift + Enter 换行 · 每次执行与验收都有记录</p>
+              <p class="composer-footnote">Enter 发送 · Shift + Enter 换行</p>
             </div>
             <div id="view-tasks" class="view-panel" hidden></div>
             <div id="view-review" class="view-panel" hidden></div>
@@ -229,14 +236,13 @@
           </section>
           <aside class="context-panel">
             <section id="project-progress"></section>
+            <section id="project-deliverables"></section>
             <section id="project-brief"></section>
-            <div class="aside-help">
-              <span data-icon="shield"></span>
-              <p>执行完成后由独立成员验收。需求更新时，旧版成果会重新核对。</p>
-            </div>
           </aside>
         </div>
-        <footer class="workspace-footer"><span>PAL Arena</span><span>数据保存在你的工作台</span></footer>
+        <footer class="workspace-footer">
+          <span>Agent Cooperation</span><span>数据保存在你的工作台</span>
+        </footer>
       </main>
     </div>
     <dialog id="modal" aria-labelledby="modal-title"><div id="modal-content"></div></dialog>

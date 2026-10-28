@@ -3,13 +3,14 @@ from __future__ import annotations
 import argparse
 import atexit
 import json
+import os
 import threading
 
 from mcp.server.fastmcp import FastMCP
 
 from .acp import ACP
 from .antigravity import Antigravity
-from .assignment import Assignment, recommend
+from .assignment import Assignment, Policy, Task, recommend
 from .common import BridgeError, load_config
 from .opencode import OpenCode
 from .workbuddy import WorkBuddy
@@ -68,6 +69,26 @@ def build_server(agents):
         Reviewer selection requires a different agent ID, not proof of an independent session.
         """
         return recommend(request)
+
+    @mcp.tool()
+    def recommend_configured_team(task: Task, policy: Policy, agents: list[dict], runtimes: list[dict], runs: dict) -> dict:
+        """Rank configured members using caller-supplied Multica observations.
+
+        Read agents and runtimes with `multica agent list --output json` and
+        `multica runtime list --output json`. For every agent on a configured
+        machine, supply `multica agent tasks ID --limit 200 --output json` in
+        runs keyed by agent ID. AGENT_COOPERATION_PROFILES selects the profiles.
+        The tool cannot authenticate supplied observations and does not dispatch.
+        """
+        from pathlib import Path
+
+        from .team_routing import TeamProfiles, recommend_team
+
+        path = os.environ.get("AGENT_COOPERATION_PROFILES")
+        if not path:
+            raise BridgeError("Set AGENT_COOPERATION_PROFILES to the team's profiles JSON file.")
+        profiles = TeamProfiles.model_validate_json(Path(path).read_text(encoding="utf-8"))
+        return recommend_team(task, policy, profiles, agents, runtimes, runs)
 
     @mcp.tool()
     def agent_sessions(agent: str, limit: int = 30) -> dict:

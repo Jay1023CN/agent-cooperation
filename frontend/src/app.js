@@ -247,7 +247,7 @@ function renderMessages() {
     return;
   }
   list.innerHTML =
-    `<div class="date-line">共同构建 · 每一步都有记录</div>` +
+    `<div class="date-line">项目对话</div>` +
     visible
       .map((message, index) => {
         const isAgent =
@@ -264,6 +264,7 @@ function renderMessages() {
 function navigate(view) {
   if (!['chat', 'tasks', 'review', 'files', 'machines', 'memory', 'logs'].includes(view)) return;
   activeView = view;
+  $('.main').dataset.view = view;
   $('.context-panel').hidden = view !== 'chat';
   $('.content-grid').classList.toggle('single-panel', view !== 'chat');
   $('.work-tabs').hidden = view === 'machines';

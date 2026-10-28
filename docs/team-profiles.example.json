@@ -1,0 +1,30 @@
+{
+  "members": [
+    {
+      "id": "member-1",
+      "name": "成员名称",
+      "github_login": null,
+      "git_name": null,
+      "git_email": null
+    }
+  ],
+  "machines": [
+    { "daemon_id": "填写 Multica daemon ID", "slots": 2 }
+  ],
+  "agents": [
+    {
+      "agent_id": "填写 Multica agent ID",
+      "owner_id": "member-1",
+      "machine_id": "填写 Multica daemon ID",
+      "roles": ["worker"],
+      "capabilities": ["code", "docs"],
+      "quality": 3,
+      "speed": 3,
+      "economy": 3,
+      "max_difficulty": "standard",
+      "preferred_for": [],
+      "quota_state": "unknown",
+      "enabled": true
+    }
+  ]
+}

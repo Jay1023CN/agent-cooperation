@@ -7,7 +7,7 @@ export function renderOverview(state, project) {
     ),
     done = tasks.filter((task) => task.status === 'done').length;
   $('#project-progress').innerHTML =
-    `<div class="section-title"><h2>交付进度</h2><span class="muted small">${done} / ${tasks.length}</span></div><div class="progress-track"><span style="width:${tasks.length ? (done / tasks.length) * 100 : 0}%"></span></div><div class="overview-tasks">${
+    `<div class="section-title"><h2>项目进展</h2><span class="muted small">${done} / ${tasks.length} 已完成</span></div><div class="progress-track"><span style="width:${tasks.length ? (done / tasks.length) * 100 : 0}%"></span></div><div class="overview-tasks">${
       tasks
         .slice(0, 4)
         .map(
@@ -15,7 +15,13 @@ export function renderOverview(state, project) {
             `<button data-action="task" data-id="${e(task.id)}"><span class="overview-dot ${task.status === 'done' ? 'complete' : ''}"></span><span>${e(task.title)}</span>${status(task.status)}</button>`,
         )
         .join('') || '<p class="empty-small">任务建立后，在这里跟进成果。</p>'
-    }</div><button class="text-link" data-action="navigate" data-view="tasks">查看全部任务 →</button>`;
+    }</div><button class="text-link" data-action="navigate" data-view="tasks">查看全部进度</button>`;
+  const files = [...state.artifacts].sort((a, b) => (b.created || 0) - (a.created || 0)).slice(0, 3);
+  $('#project-deliverables').innerHTML = `<div class="section-title"><h2>最近成果</h2></div>${
+    files.length
+      ? `<div class="overview-files">${files.map((file) => `<button data-action="navigate" data-view="files">${icon('file')}<span>${e(file.name)}</span></button>`).join('')}</div>`
+      : '<p class="empty-small">成果准备好后会出现在这里。</p>'
+  }<button class="text-link" data-action="navigate" data-view="files">查看全部成果</button>`;
   const requirements = asArray(project?.requirements);
   $('#project-brief').innerHTML =
     `<div class="section-title"><h2>当前需求</h2><span class="muted small">v${project?.revision || 1}</span></div>${
@@ -25,7 +31,7 @@ export function renderOverview(state, project) {
             .map((item) => `<li>${e(item)}</li>`)
             .join('')}</ul>`
         : '<p class="empty-small">先写清楚作品要达到的效果，再安排执行与验收。</p>'
-    }<button class="text-link" data-action="requirements">${requirements.length ? '查看需求清单' : '填写需求清单'} →</button>`;
+    }<button class="text-link" data-action="requirements">${requirements.length ? '查看需求清单' : '填写需求清单'}</button>`;
 }
 
 export function renderStats(state) {
