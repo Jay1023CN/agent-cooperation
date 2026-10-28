@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.3.0 (2026-10-28)
+
+### Chores
+
+- Sync version to config.py [skip ci]
+  ([`fb79104`](https://github.com/Jay1023CN/agent-cooperation/commit/fb79104599b19002a22f70f3d5128bb2818fede1))
+
+### Features
+
+- **arena**: 用成员自己的 GitHub 账号提交和推送任务成果
+  ([`e8ff62c`](https://github.com/Jay1023CN/agent-cooperation/commit/e8ff62ce92b2443e1f5f93067d62452628e9a130))
+
+
 ## v1.2.0 (2026-10-28)
 
 ### Chores
