@@ -59,7 +59,7 @@ pal-arena-平台-架构-提交号/
 
 ## 首次启动 Mac mini 中心
 
-Apple Silicon Mac mini 可使用 [v1.7.1 安装助手](install-mac-mini.command)。对应 Release 的 `Mac-mini-Setup-v1.7.1.zip` 解压后双击 `.command`：它下载并校验固定版本的原生包，安装到当前用户的 Applications 目录，创建登录自启服务，最后打开工作台。无需 Python 或 Node.js。安装助手本身只做过 Bash 语法检查；中心二进制需以对应原生构建的 macOS 启动及 MCP 检查结果为准，用户 Mac mini 上的安装还需实际运行确认。
+Apple Silicon Mac mini 可使用 [v1.8.2 安装助手](install-mac-mini.command)。对应 Release 的 `Mac-mini-Setup-v1.8.2.zip` 解压后双击 `.command`：它下载并校验固定版本的原生包，安装到当前用户的 Applications 目录，创建登录自启服务，最后打开工作台。无需 Python 或 Node.js。安装助手本身只做过 Bash 语法检查；中心二进制需以对应原生构建的 macOS 启动及 MCP 检查结果为准，用户 Mac mini 上的安装还需实际运行确认。
 
 安装助手遇到已有启动配置或占用中的 8765 端口会停止，不覆盖已有中心。数据库仍放在 `~/.pal-arena/server`。其他电脑访问前，需在 Mac mini 安装并登录 Tailscale，再从工作台开启共享。Intel Mac 不使用这个 ARM64 安装助手。
 

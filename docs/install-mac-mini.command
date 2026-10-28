@@ -2,8 +2,8 @@
 set -euo pipefail
 umask 077
 
-TAG="v1.7.1"
-NAME="pal-arena-darwin-arm64-f3d275ab00e7"
+TAG="v1.8.2"
+NAME="pal-arena-darwin-arm64-1aa94d707dcd"
 BASE="https://github.com/Jay1023CN/agent-cooperation/releases/download/$TAG"
 CACHE="$HOME/Library/Caches/AgentCooperation"
 RELEASES="$HOME/Applications/AgentCooperation/releases"
