@@ -319,7 +319,7 @@ def smoke_bundle(executable: Path):
                         time.sleep(0.2)
                 with opener.open(url + "/", timeout=5) as response:
                     page = response.read().decode("utf-8")
-                if "PAL Arena" not in page:
+                if "<title>Agent Cooperation</title>" not in page:
                     raise BundleError("Native server did not serve the platform application")
                 resources = StaticResources()
                 resources.feed(page)
