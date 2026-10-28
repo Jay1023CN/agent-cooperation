@@ -26,34 +26,59 @@ function slots(machine, state) {
   };
 }
 
+const kindLabels = { worker: '执行', leader: '负责人', reviewer: '验收', publisher: '发布' };
+
+/** Each computer is a lane; each running task occupies one of its execution slots. */
+function machineLane(machine, state) {
+  const agents = new Map(
+    state.agents.filter((agent) => agent.machine_id === machine.id).map((a) => [a.id, a]),
+  );
+  const running = state.tasks.filter((task) => task.status === 'running' && agents.has(task.agent_id));
+  const total = Math.max(1, Math.min(8, machine.slots || 1));
+  const { busy, html: pips } = slots(machine, state);
+  const strips = running
+    .map((task) => {
+      const agent = agents.get(task.agent_id);
+      const role = task.kind === 'worker' ? '' : ` · ${kindLabels[task.kind] || task.kind}`;
+      return `<button class="rail-slot status-${e(task.kind === 'reviewer' ? 'in_review' : task.status)}" data-action="task" data-id="${e(task.id)}"><span>${e(task.title)}</span><small>${e(agent.name)}${e(role)}</small></button>`;
+    })
+    .join('');
+  // Tasks from other projects or private channels still occupy slots; they are counted, not shown.
+  const hidden = Math.max(0, busy - running.length);
+  const rest = !machine.online
+    ? '<div class="rail-free">离线</div>'
+    : hidden
+      ? `<div class="rail-free">另有 ${hidden} 个其他项目或私聊任务在运行</div>`
+      : !busy
+        ? '<div class="rail-free">空闲</div>'
+        : '';
+  return `<div class="rail-machine ${machine.online ? '' : 'offline'}"><div class="rail-machine-head"><span class="online-dot ${machine.online ? '' : 'offline'}"></span><strong>${e(machine.name)}</strong>${pips}<small>${busy}/${total}</small></div><div class="rail-slots">${strips}${rest}</div></div>`;
+}
+
 export function renderOverview(state, project) {
   const online = state.machines.filter((machine) => machine.online).length;
+  const machines = [...state.machines].sort((a, b) => Number(b.online) - Number(a.online));
   $('#project-fleet').innerHTML =
-    `<div class="section-title"><h2>电脑</h2><span class="muted small">${online} / ${state.machines.length} 在线</span></div>${
-      state.machines.length
-        ? `<div class="mini-fleet">${state.machines
-            .map(
-              (machine) =>
-                `<div class="mini-machine"><span class="online-dot ${machine.online ? '' : 'offline'}" title="${machine.online ? '在线' : '离线'}"></span><strong>${e(machine.name)}</strong>${slots(machine, state).html}</div>`,
-            )
-            .join('')}</div>`
+    `<div class="section-title"><h2>机位</h2><span class="muted small">${online} / ${state.machines.length} 台在线</span></div>${
+      machines.length
+        ? `<div class="rail-lanes">${machines.map((machine) => machineLane(machine, state)).join('')}</div>`
         : '<p class="empty-small">还没有电脑接入。</p><button class="text-link" data-action="invite-machine">连接第一台电脑</button>'
     }`;
-  const tasks = sharedWorkers(state),
-    done = tasks.filter((task) => laneOf(task.status) === 'done').length,
-    open = tasks
-      .filter((task) => task.status !== 'cancelled')
-      .sort((a, b) => Number(laneOf(a.status) === 'done') - Number(laneOf(b.status) === 'done'));
+  const queued = state.tasks.filter((task) => task.status === 'queued');
   $('#project-progress').innerHTML =
-    `<div class="section-title"><h2>任务</h2><span class="muted small">完成 ${done} / ${tasks.length}</span></div><div class="overview-tasks">${
-      open
-        .slice(0, 5)
-        .map(
-          (task) =>
-            `<button data-action="task" data-id="${e(task.id)}" class="status-${e(task.status)}"><span class="overview-dot"></span><span>${e(task.title)}</span><span class="overview-state">${e(statusLabels[task.status] || task.status)}</span></button>`,
-        )
-        .join('') || '<p class="empty-small">负责人拆出任务后会列在这里。</p>'
-    }</div>${tasks.length > 5 ? '<button class="text-link" data-action="navigate" data-view="tasks">全部任务</button>' : ''}`;
+    `<div class="section-title"><h2>排队</h2><span class="muted small">${queued.length} 个</span></div>${
+      queued.length
+        ? `<div class="rail-queue">${queued
+            .slice(0, 6)
+            .map(
+              (task) =>
+                `<button class="status-queued" data-action="task" data-id="${e(task.id)}"><span>${e(task.title)}</span>${task.routing_reason ? `<small>${e(task.routing_reason)}</small>` : '<small>等待空闲成员</small>'}</button>`,
+            )
+            .join(
+              '',
+            )}</div>${queued.length > 6 ? '<button class="text-link" data-action="navigate" data-view="tasks">全部任务</button>' : ''}`
+        : '<p class="empty-small">没有排队的任务。</p>'
+    }`;
   const requirements = asArray(project?.requirements);
   $('#project-brief').innerHTML =
     `<div class="section-title"><h2>需求清单</h2><span class="muted small">v${project?.revision || 1}</span></div>${
@@ -68,7 +93,7 @@ export function renderOverview(state, project) {
   $('#project-deliverables').innerHTML = `<div class="section-title"><h2>最近成果</h2></div>${
     files.length
       ? `<div class="overview-files">${files.map((file) => `<button data-action="navigate" data-view="files">${icon(file.name.endsWith('.blend') ? 'cube' : 'file')}<span>${e(file.name)}</span></button>`).join('')}</div>`
-      : '<p class="empty-small">还没有成果文件。</p>'
+      : ''
   }`;
   $('#project-deliverables').hidden = !files.length;
 }
@@ -98,18 +123,26 @@ export function renderStats(state) {
       .join('')}</div>`;
 }
 
-/** Work that stays stuck until a person acts: tool approvals and failed runs. */
+/** Work that stays stuck until a person acts. Approvals and retries can be answered right here. */
 export function renderAttention(state) {
   const rows = [];
   state.tasks.forEach((task) => {
     const waiting = asArray(task.permissions).filter((item) => !item.decided);
-    if (waiting.length && task.status === 'running')
+    if (waiting.length && task.status === 'running') {
+      const permission = waiting[0];
+      const options = asArray(permission.options)
+        .slice(0, 3)
+        .map(
+          (option, index) =>
+            `<button class="button small ${index === 0 ? 'primary' : ''}" data-action="permission" data-task="${e(task.id)}" data-permission="${e(permission.id)}" data-option="${e(option.optionId || option.id)}">${e(option.name || option.label || option.optionId)}</button>`,
+        )
+        .join('');
       rows.push(
-        `<button class="attention-row status-in_review" data-action="task" data-id="${e(task.id)}"><strong>等你授权</strong><span>${e(task.title)}</span><span class="muted">${e(waiting[0].tool?.title || waiting[0].tool?.name || '工具操作')}</span><span class="text-link">去处理</span></button>`,
+        `<div class="attention-row status-in_review"><strong>等你授权</strong><button class="attention-main" data-action="task" data-id="${e(task.id)}"><span>${e(task.title)}</span><span class="muted">${e(permission.tool?.title || permission.tool?.name || '工具操作')}</span></button><div class="attention-actions">${options}</div></div>`,
       );
-    else if (laneOf(task.status) === 'blocked')
+    } else if (laneOf(task.status) === 'blocked')
       rows.push(
-        `<button class="attention-row status-${e(task.status)}" data-action="task" data-id="${e(task.id)}"><strong>${e(statusLabels[task.status])}</strong><span>${e(task.title)}</span><span class="muted">${e(task.result || task.review?.summary || '')}</span><span class="text-link">查看</span></button>`,
+        `<div class="attention-row status-${e(task.status)}"><strong>${e(statusLabels[task.status])}</strong><button class="attention-main" data-action="task" data-id="${e(task.id)}"><span>${e(task.title)}</span><span class="muted">${e(task.result || task.review?.summary || '')}</span></button><div class="attention-actions"><button class="button small" data-action="task" data-id="${e(task.id)}">查看</button><button class="button small" data-action="retry-task" data-id="${e(task.id)}">检查后重试</button></div></div>`,
       );
   });
   $('#attention').innerHTML = rows.slice(0, 4).join('');

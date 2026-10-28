@@ -18,6 +18,7 @@ import {
 } from './components/ui.js';
 import { emptySnapshot, createSubmissionQueue } from './lib/state.js';
 import { setTheme, restoreTheme } from './components/theme.js';
+import { createPalette, taskHint } from './components/palette.js';
 import { closeSidebar, toggleSidebar, initializeNavigation } from './components/navigation.js';
 import { request, makeRequestId } from './lib/api.js';
 import { renderTasks, renderReviews, renderFiles, renderLogs } from './views/workspace.js';
@@ -130,6 +131,39 @@ function setConnection(ok, label) {
   $('#connection-status').className = `connection-indicator${ok ? '' : ' error'}`;
   $('#connection-status').innerHTML = `<i></i>${e(label)}`;
 }
+const views = ['chat', 'tasks', 'review', 'files', 'machines', 'memory', 'logs'];
+/** Location is #/<project>/<view> or #/<project>/task/<task>, so a link or a reload lands on the same place. */
+function readRoute() {
+  const [projectId = '', view = '', taskId = ''] = location.hash
+    .replace(/^#\/?/, '')
+    .split('/')
+    .map((part) => decodeURIComponent(part));
+  return {
+    projectId,
+    view: views.includes(view) ? view : '',
+    taskId: view === 'task' ? taskId : '',
+  };
+}
+function writeRoute() {
+  if (!identity) return;
+  const tail = modalTaskId ? `task/${encodeURIComponent(modalTaskId)}` : activeView;
+  const next = `#/${encodeURIComponent(currentProject || '')}/${tail}`;
+  if (location.hash !== next) history.replaceState(null, '', next);
+  try {
+    if (currentProject) localStorage.setItem('pal-arena-project', currentProject);
+  } catch {
+    /* Storage can be disabled. */
+  }
+}
+function preferredProject(projects) {
+  let remembered = readRoute().projectId;
+  try {
+    remembered ||= localStorage.getItem('pal-arena-project') || '';
+  } catch {
+    /* Storage can be disabled. */
+  }
+  return (projects.find((item) => item.id === remembered) || projects[0])?.id || null;
+}
 async function refresh(force = false) {
   if (!identity || (pollInFlight && !force)) return;
   pollInFlight = true;
@@ -146,7 +180,7 @@ async function refresh(force = false) {
         return;
       state = { ...state, ...fresh };
       if (!currentProject && state.projects.length) {
-        currentProject = state.projects[0].id;
+        currentProject = preferredProject(state.projects);
         requestedProject = currentProject;
         const nextQuery = new URLSearchParams({ project_id: currentProject, channel });
         const detail = await api(`/api/state?${nextQuery}`);
@@ -155,10 +189,12 @@ async function refresh(force = false) {
         state = { ...state, ...detail };
       }
     }
-    if (demo && !currentProject) currentProject = state.projects[0].id;
+    if (demo && !currentProject) currentProject = preferredProject(state.projects);
     if (currentProject && !state.projects.some((item) => item.id === currentProject))
       currentProject = state.projects[0]?.id || null;
     render();
+    notifyAttention();
+    writeRoute();
     setConnection(true, demo ? '示例数据' : '已同步');
     if (activeView === 'memory' && project()) await loadMemories(false);
   } catch (error) {
@@ -193,7 +229,8 @@ function render() {
     quota = state.storage?.quota || 5e9,
     percent = Math.min(100, (used / quota) * 100);
   $('#sidebar-storage').innerHTML =
-    `<div class="storage-heading"><span>中心暂存</span><strong>${percent.toFixed(0)}%</strong></div><div class="progress-track"><span style="width:${percent.toFixed(1)}%"></span></div><div class="storage-sub"><span>${size(used)} / ${size(quota)}</span></div>`;
+    `<span>暂存</span><div class="progress-track"><span style="width:${percent.toFixed(1)}%"></span></div><span>${percent.toFixed(0)}%</span>`;
+  $('#sidebar-storage').title = `中心暂存 ${size(used)} / ${size(quota)}`;
   renderStats(state);
   const attention = renderAttention(state);
   document.title = attention ? `(${attention}) Agent Cooperation` : 'Agent Cooperation';
@@ -283,7 +320,7 @@ function renderMessages() {
   if (nearBottom || visible.length <= 3) list.scrollTop = list.scrollHeight;
 }
 function navigate(view) {
-  if (!['chat', 'tasks', 'review', 'files', 'machines', 'memory', 'logs'].includes(view)) return;
+  if (!views.includes(view)) return;
   activeView = view;
   $('.main').dataset.view = view;
   $('.context-panel').hidden = view !== 'chat';
@@ -297,6 +334,7 @@ function navigate(view) {
       node.setAttribute('aria-selected', String(node.dataset.view === view));
   });
   closeSidebar();
+  writeRoute();
   if (view === 'memory') loadMemories(true).catch((error) => toast(error.message, true));
 }
 function openModal(title, subtitle, body, onSubmit) {
@@ -310,6 +348,21 @@ function openModal(title, subtitle, body, onSubmit) {
     `<div class="modal-header"><div><h2 id="modal-title">${e(title)}</h2>${subtitle ? `<p>${e(subtitle)}</p>` : ''}</div><button class="icon-button" data-action="close-modal" aria-label="关闭">${icon('close')}</button></div><form id="modal-form" class="modal-body">${body}<p class="form-error" id="modal-error" role="alert"></p></form>`;
   if (!$('#modal').open) $('#modal').showModal();
   hydrateIcons($('#modal'));
+  addCopyButtons($('#modal'));
+}
+/** Commands and IDs in dialogs are meant to be pasted elsewhere; give each block a copy button. */
+function addCopyButtons(root) {
+  $$('pre', root).forEach((block) => {
+    if (block.parentElement.classList.contains('copyable')) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'copyable';
+    block.replaceWith(wrap);
+    wrap.append(block);
+    wrap.insertAdjacentHTML(
+      'beforeend',
+      '<button type="button" class="copy-button" data-action="copy-pre">复制</button>',
+    );
+  });
 }
 function releaseModalURLs() {
   modalObjectUrls.forEach((url) => URL.revokeObjectURL(url));
@@ -324,6 +377,7 @@ function closeModal() {
   modalTaskSignature = '';
   releaseModalURLs();
   $('#modal-content').replaceChildren();
+  writeRoute();
 }
 const modalActions = (label) =>
   `<div class="modal-actions"><button class="button" type="button" data-action="close-modal">取消</button><button class="button primary" type="submit">${e(label)}</button></div>`;
@@ -625,6 +679,7 @@ const { openTaskForm, updateTaskAgentOptions, openTask } = createTaskDialogs({
   trackTask: (task) => {
     modalTaskId = task.id;
     modalTaskSignature = JSON.stringify(task);
+    writeRoute();
   },
 });
 
@@ -706,6 +761,7 @@ $('#modal').addEventListener('close', () => {
   modalTaskId = null;
   modalTaskSignature = '';
   releaseModalURLs();
+  writeRoute();
 });
 $('#modal').addEventListener('click', (event) => {
   if (event.target === $('#modal')) {
@@ -750,13 +806,161 @@ document.addEventListener('change', (event) => {
     if (role) role.value = 'worker';
   }
 });
+const palette = createPalette(paletteItems);
+const goKeys = { c: 'chat', t: 'tasks', r: 'review', f: 'files', m: 'machines', y: 'memory', l: 'logs' };
+let goPending = 0;
 document.addEventListener('keydown', (event) => {
-  if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
+  if (!identity) return;
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+    event.preventDefault();
+    if (palette.isOpen()) palette.close();
+    else palette.open();
+    return;
+  }
+  const typing = event.target.closest?.('input, textarea, select, [contenteditable="true"]');
+  if (typing || event.metaKey || event.ctrlKey || event.altKey || $('#modal').open || palette.isOpen())
+    return;
+  const key = event.key.toLowerCase();
+  if (goPending && Date.now() - goPending < 1200 && goKeys[key]) {
+    event.preventDefault();
+    goPending = 0;
+    navigate(goKeys[key]);
+  } else if (key === 'g') goPending = Date.now();
+  else if (key === '/') {
     event.preventDefault();
     navigate('chat');
     $('#message-input').focus();
-  }
+  } else if (key === 'n') {
+    event.preventDefault();
+    openTaskForm();
+  } else goPending = 0;
 });
+function paletteItems() {
+  const pages = [
+    ['chat', '对话', 'chat', 'G C'],
+    ['tasks', '任务看板', 'board', 'G T'],
+    ['review', '验收', 'check', 'G R'],
+    ['files', '成果', 'folder', 'G F'],
+    ['machines', '电脑与成员', 'monitor', 'G M'],
+    ['memory', '记忆', 'spark', 'G Y'],
+    ['logs', '运行记录', 'terminal', 'G L'],
+  ].map(([view, label, iconName, hint]) => ({
+    group: '页面',
+    label,
+    hint,
+    icon: iconName,
+    keywords: view,
+    run: () => navigate(view),
+  }));
+  const action = (label, iconName, hint, run) => ({ group: '操作', label, hint, icon: iconName, run });
+  const quick = [
+    action('新建任务', 'plus', 'N', () => openTaskForm()),
+    action('给负责人发消息', 'chat', '/', () => {
+      navigate('chat');
+      $('#message-input').focus();
+    }),
+  ].map((item) => ({ ...item, group: '常用' }));
+  const more = [
+    action('新建项目', 'plus', '', () => openProject()),
+    action('编辑需求清单', 'list', '', () => openRequirements()),
+    action('项目设置', 'settings', '', () => openProjectSettings()),
+    action('连接一台电脑', 'monitor', '', () => openInvite('machine')),
+    action('邀请伙伴', 'users', '', () => openInvite('member')),
+    action('伙伴与令牌', 'users', '', () => openTeam()),
+    action(channel === 'shared' ? '切到私聊负责人' : '切到团队频道', 'chat', '', () =>
+      switchChannel(channel === 'shared' ? 'personal' : 'shared'),
+    ),
+    action('任务需要我时发桌面提醒', 'bell', notificationLabel(), () => enableNotifications()),
+    action('浅色主题', 'sun', '', () => setTheme('light')),
+    action('深色主题', 'moon', '', () => setTheme('dark')),
+    action('主题跟随系统', 'monitor', '', () => setTheme('system')),
+    action('刷新', 'refresh', '', () => refresh(true)),
+    action('接入指南', 'list', '', () => openSetupHelp()),
+    action('退出登录', 'logout', '', () => $('[data-action="logout"]').click()),
+  ];
+  const projects = state.projects.map((item) => ({
+    group: '项目',
+    label: item.name,
+    hint: item.id === currentProject ? '当前' : '',
+    icon: 'grid',
+    run: () => selectProject(item.id),
+  }));
+  const tasks = state.tasks
+    .filter((task) => task.status !== 'cancelled')
+    .map((task) => ({
+      group: '任务',
+      label: task.title,
+      hint: taskHint(task),
+      icon: task.capability === 'blender' ? 'cube' : 'branch',
+      keywords: task.id,
+      run: () => openTask(task.id),
+    }));
+  return [...quick, ...pages, ...tasks, ...projects, ...more];
+}
+async function selectProject(id) {
+  currentProject = id;
+  messageSignature = '';
+  $('#message-input').value = unreadDrafts.get(`${currentProject}:${channel}`) || '';
+  closeSidebar();
+  writeRoute();
+  await refresh(true);
+}
+async function switchChannel(next) {
+  channel = next;
+  messageSignature = '';
+  $('#message-input').value = unreadDrafts.get(`${currentProject}:${channel}`) || '';
+  await refresh(true);
+}
+
+/** Desktop notifications for approvals and failures, only while the tab is in the background. */
+let seenAttention = null;
+function attentionKeys() {
+  return state.tasks
+    .filter(
+      (task) =>
+        (task.status === 'running' && asArray(task.permissions).some((item) => !item.decided)) ||
+        ['failed', 'blocked', 'interrupted', 'changes_requested'].includes(task.status),
+    )
+    .map((task) => [`${task.id}:${task.status}:${task.attempt}`, task]);
+}
+function notifyAttention() {
+  const current = attentionKeys();
+  const fresh = seenAttention ? current.filter(([key]) => !seenAttention.has(key)) : [];
+  seenAttention = new Set(current.map(([key]) => key));
+  if (!fresh.length || !document.hidden || demo || !('Notification' in window)) return;
+  if (Notification.permission !== 'granted') return;
+  const [, task] = fresh[0];
+  const note = new Notification(
+    task.status === 'running' ? '有操作等你授权' : `任务${statusLabels[task.status]}`,
+    {
+      body: fresh.length > 1 ? `${task.title} 等 ${fresh.length} 项` : task.title,
+      tag: 'agent-cooperation-attention',
+    },
+  );
+  note.onclick = () => {
+    window.focus();
+    openTask(task.id);
+    note.close();
+  };
+}
+function notificationLabel() {
+  if (!('Notification' in window)) return '浏览器不支持';
+  return { granted: '已开启', denied: '浏览器已拒绝' }[Notification.permission] || '';
+}
+async function enableNotifications() {
+  if (!('Notification' in window)) {
+    toast('这个浏览器不支持桌面提醒。', true);
+    return;
+  }
+  const result = await Notification.requestPermission();
+  toast(
+    result === 'granted'
+      ? '已开启：页面在后台时，有授权请求或任务失败会提醒你。'
+      : '浏览器没有允许提醒，可以在网站设置里打开。',
+    result !== 'granted',
+  );
+}
+
 document.addEventListener('click', async (event) => {
   const button = event.target.closest('[data-action]');
   if (!button) return;
@@ -791,12 +995,17 @@ document.addEventListener('click', async (event) => {
       }
     } else if (action === 'task') openTask(button.dataset.id);
     else if (action === 'close-modal') closeModal();
-    else if (action === 'project') {
-      currentProject = button.dataset.id;
-      messageSignature = '';
-      $('#message-input').value = unreadDrafts.get(`${currentProject}:${channel}`) || '';
-      closeSidebar();
-      await refresh(true);
+    else if (action === 'project') await selectProject(button.dataset.id);
+    else if (action === 'palette') palette.open();
+    else if (action === 'copy-pre') {
+      const text = button.parentElement.querySelector('pre').textContent;
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        button.textContent = '已复制';
+        setTimeout(() => {
+          if (button.isConnected) button.textContent = '复制';
+        }, 1500);
+      } else toast('当前连接不支持自动复制，请手动选中复制。');
     } else if (action === 'channel') {
       channel = button.dataset.channel;
       messageSignature = '';
@@ -891,7 +1100,7 @@ document.addEventListener('click', async (event) => {
         { option_id: button.dataset.option || null },
       );
       await refresh(true);
-      openTask(button.dataset.task);
+      if (modalTaskId === button.dataset.task) openTask(button.dataset.task);
       toast('已提交操作决定。');
     } else if (action === 'upload') await uploadFile();
     else if (action === 'preview-file') await previewFile(button.dataset.id);
@@ -934,6 +1143,7 @@ document.addEventListener('click', async (event) => {
     $('#demo-banner a').hidden = true;
     $$('a[href="/"]').forEach((link) => (link.href = '#'));
   }
+  const route = readRoute();
   if (demo) {
     identity = { id: 'demo', name: '你', kind: 'member' };
     showApp();
@@ -947,8 +1157,17 @@ document.addEventListener('click', async (event) => {
       showLogin();
     }
   }
+  if (identity) {
+    if (route.view) navigate(route.view);
+    if (route.taskId && state.tasks.some((task) => task.id === route.taskId)) openTask(route.taskId);
+  }
+  let lastPoll = 0;
   setInterval(() => {
-    if (!document.hidden && identity && !demo) refresh();
+    if (!identity || demo) return;
+    // Foreground every 4 s; background every 20 s, enough for approval reminders.
+    if (document.hidden && Date.now() - lastPoll < 20000) return;
+    lastPoll = Date.now();
+    refresh();
   }, 4000);
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && identity && !demo) refresh();

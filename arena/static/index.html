@@ -4,6 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
+    <link rel="manifest" href="/static/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/static/icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Agent Co." />
     <meta name="theme-color" content="#eef0ec" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#0e1216" media="(prefers-color-scheme: dark)" />
     <meta
@@ -21,8 +25,8 @@
         if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
       } catch {}
     </script>
-    <script type="module" crossorigin src="/static/assets/index-tAzAoG16.js"></script>
-    <link rel="stylesheet" crossorigin href="/static/assets/index-B9DB1Xyl.css">
+    <script type="module" crossorigin src="/static/assets/index-D0cmDThw.js"></script>
+    <link rel="stylesheet" crossorigin href="/static/assets/index-b_vuLzpQ.css">
   </head>
   <body>
     <section id="login-screen" class="login-screen" hidden>
@@ -64,6 +68,9 @@
         <a class="brand" href="/"
           ><span class="brand-mark"><i></i><i></i><i></i></span>Agent Cooperation</a
         >
+        <button class="palette-trigger" data-action="palette" aria-keyshortcuts="Control+K">
+          <span data-icon="search"></span><span>跳转、查找或执行</span><kbd>Ctrl K</kbd>
+        </button>
         <nav class="main-nav" aria-label="主导航">
           <button data-action="navigate" data-view="chat" class="nav-item active">
             <span data-icon="chat"></span>对话
@@ -97,15 +104,25 @@
         </div>
         <div id="project-list" class="project-list"></div>
         <div class="sidebar-spacer"></div>
-        <div class="storage-card" id="sidebar-storage"></div>
         <div class="sidebar-links">
           <button class="nav-item" data-action="team"><span data-icon="users"></span>伙伴与令牌</button>
           <button class="nav-item" data-action="setup-help"><span data-icon="list"></span>接入指南</button>
         </div>
+        <div class="sidebar-status">
+          <span class="connection-indicator" id="connection-status"><i></i>正在连接</span>
+          <div class="storage-meter" id="sidebar-storage"></div>
+        </div>
         <div class="user-row">
           <span class="user-avatar" id="user-avatar">Y</span>
           <strong id="user-name">你</strong>
-          <button class="icon-button" data-action="logout" aria-label="退出登录" title="退出登录">
+          <label class="theme-control"
+            ><span class="sr-only">界面主题</span
+            ><select id="theme-select" aria-label="界面主题" title="界面主题">
+              <option value="system">跟随系统</option>
+              <option value="light">浅色</option>
+              <option value="dark">深色</option>
+            </select></label
+          ><button class="icon-button" data-action="logout" aria-label="退出登录" title="退出登录">
             <span data-icon="logout"></span>
           </button>
         </div>
@@ -117,40 +134,34 @@
             <span data-icon="menu"></span>
           </button>
           <strong class="topbar-project" id="breadcrumb-project">未选择项目</strong>
-          <div class="topbar-right">
-            <span class="connection-indicator" id="connection-status"><i></i>正在连接</span
-            ><label class="theme-control"
-              ><span class="sr-only">界面主题</span
-              ><select id="theme-select" aria-label="界面主题">
-                <option value="system">跟随系统</option>
-                <option value="light">浅色</option>
-                <option value="dark">深色</option>
-              </select></label
-            ><button class="icon-button" data-action="refresh" aria-label="刷新" title="刷新">
-              <span data-icon="refresh"></span>
-            </button>
-          </div>
+          <button class="icon-button" data-action="palette" aria-label="跳转、查找或执行">
+            <span data-icon="search"></span>
+          </button>
         </header>
         <div id="demo-banner" class="demo-banner" hidden>
-          <span>示例数据：任务、电脑和文件都是演示用的，没有真实代理在运行。</span
-          ><a href="/">登录真实调度台</a>
+          <span>示例数据，没有真实代理在运行。</span><a href="/">登录真实调度台</a>
         </div>
         <section class="project-header">
           <div class="project-title">
-            <div class="project-kicker">
-              <span id="project-status" class="pill">准备开始</span
-              ><button class="revision" data-action="requirements" title="查看需求清单">
-                需求 <span id="requirement-revision">v1</span>
-              </button>
-            </div>
             <h1 id="project-name">还没有项目</h1>
+            <span id="project-status" class="pill">准备开始</span
+            ><button class="revision" data-action="requirements" title="查看需求清单">
+              需求 <span id="requirement-revision">v1</span>
+            </button>
             <p id="project-description">新建一个项目，写下目标和完成条件。</p>
           </div>
           <div class="project-actions">
-            <button class="icon-button" data-action="project-settings" title="项目设置" aria-label="项目设置">
+            <button class="icon-button" data-action="refresh" aria-label="刷新" title="刷新">
+              <span data-icon="refresh"></span></button
+            ><button
+              class="icon-button"
+              data-action="project-settings"
+              title="项目设置"
+              aria-label="项目设置"
+            >
               <span data-icon="settings"></span></button
             ><button class="button" data-action="requirements"><span data-icon="list"></span>需求清单</button
-            ><button class="button primary" data-action="new-task">
+            ><button class="button primary" data-action="new-task" aria-keyshortcuts="N">
               <span data-icon="plus"></span>新建任务
             </button>
           </div>
@@ -215,7 +226,7 @@
             <div id="view-logs" class="view-panel" hidden></div>
           </section>
           <aside class="context-panel">
-            <section id="project-fleet"></section>
+            <section id="project-fleet" class="rail-fleet"></section>
             <section id="project-progress"></section>
             <section id="project-brief"></section>
             <section id="project-deliverables"></section>
@@ -224,6 +235,26 @@
       </main>
     </div>
     <dialog id="modal" aria-labelledby="modal-title"><div id="modal-content"></div></dialog>
+    <dialog id="palette" class="palette" aria-label="跳转、查找或执行">
+      <div class="palette-input">
+        <span data-icon="search"></span
+        ><input
+          id="palette-input"
+          type="text"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="输入页面、项目、任务或操作…"
+          role="combobox"
+          aria-expanded="true"
+          aria-controls="palette-list"
+        /><kbd>Esc</kbd>
+      </div>
+      <div id="palette-list" class="palette-list" role="listbox"></div>
+      <div class="palette-foot">
+        <span><kbd>↑</kbd><kbd>↓</kbd> 选择</span><span><kbd>Enter</kbd> 执行</span
+        ><span><kbd>G</kbd> 然后 <kbd>C</kbd><kbd>T</kbd><kbd>R</kbd><kbd>F</kbd><kbd>M</kbd> 切换页面</span>
+      </div>
+    </dialog>
     <div id="toast" class="toast" role="status" hidden></div>
   </body>
 </html>
