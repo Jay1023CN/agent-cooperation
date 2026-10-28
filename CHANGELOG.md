@@ -2,6 +2,24 @@
 
 <!-- version list -->
 
+## v1.9.0 (2026-10-28)
+
+### Chores
+
+- Sync version to config.py [skip ci]
+  ([`d2a15a4`](https://github.com/Jay1023CN/agent-cooperation/commit/d2a15a48996abcac1e38d4892c6401536847567a))
+
+### Documentation
+
+- Mac mini 安装助手固定到已验证源码的 v1.8.2
+  ([`dc9fa02`](https://github.com/Jay1023CN/agent-cooperation/commit/dc9fa026d9afc9a99cee532dfb99536e9f099f7b))
+
+### Features
+
+- 接入可自选模型的 DSH harness 并由 GitHub 直接发布原生包
+  ([`df0ea7f`](https://github.com/Jay1023CN/agent-cooperation/commit/df0ea7fa3bb2a3cc01a967cac95ee70353f206e4))
+
+
 ## v1.8.2 (2026-10-28)
 
 ### Bug Fixes
