@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.6.0 (2026-10-28)
+
+### Chores
+
+- Sync version to config.py [skip ci]
+  ([`de504b8`](https://github.com/Jay1023CN/agent-cooperation/commit/de504b8e808efd2f1b13907ebfdd1ef91c187350))
+
+### Features
+
+- **arena**: 用 GitHub 登录工作台，中心按任务下发短期推送凭据
+  ([`fd8bf89`](https://github.com/Jay1023CN/agent-cooperation/commit/fd8bf89716e09687cac7dac30b415c55b16dcd9b))
+
+
 ## v1.5.0 (2026-10-28)
 
 ### Chores
