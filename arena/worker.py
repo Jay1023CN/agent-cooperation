@@ -1083,6 +1083,26 @@ def cli_result(output, provider):
     return text
 
 
+def recent_conversation(messages, *, budget=12000):
+    """Keep the newest conversation within a bounded character budget."""
+    selected = []
+    remaining = budget
+    truncated = len(messages) > 40
+    for message in reversed(messages[-40:]):
+        content = str(message.get("content", ""))
+        clipped = content[-min(2000, remaining) :] if remaining else ""
+        if not clipped and content:
+            truncated = True
+            break
+        truncated = truncated or len(content) > len(clipped)
+        selected.append({"author": message.get("author"), "content": clipped})
+        remaining -= len(clipped)
+        if remaining <= 0:
+            truncated = truncated or len(selected) < len(messages)
+            break
+    return list(reversed(selected)), truncated
+
+
 def task_prompt(job, *, desktop=False):
     source = job.get("source")
     data = {
@@ -1094,10 +1114,7 @@ def task_prompt(job, *, desktop=False):
         "integration": job.get("integration", {}),
     }
     context = job.get("context", {})
-    data["recent_messages"] = [
-        {"author": m.get("author"), "content": str(m.get("content", ""))[-2000:]}
-        for m in context.get("messages", [])[-40:]
-    ]
+    data["recent_messages"], data["conversation_truncated"] = recent_conversation(context.get("messages", []))
     data["project_tasks"] = [
         {
             "id": t.get("id"),
@@ -1118,18 +1135,24 @@ def task_prompt(job, *, desktop=False):
         else "当前目录是这次任务的工作目录。"
     )
     return (
-        "你在 PAL Arena 比赛工作台中执行一个真实任务。" + workspace_note + "\n"
+        "你在 Agent Cooperation 工作台中处理用户对话或执行任务。" + workspace_note + "\n"
         "按需求和验收清单工作；不要访问无关目录，不要提交凭据，不要擅自合并主分支或部署。\n"
         "需要共享下载的文档、模型等交付文件放在任务工作区的 arena-exports/ 中。每份不超过 128MiB，总容量遵守项目预算。\n"
-        "负责人维护 requirements，再明确创建子任务；不要只描述计划。任务完成必须提供文件、测试和产物证据。\n"
+        "负责人先判断用户意图：提问、讨论、比较方案或要求出计划时，直接对话和整理方案，不创建子任务、"
+        "不启动其他代理、不修改验收清单或项目文件。不要把讨论方案误认为已经授权执行。\n"
+        "用户已经明确要求开始、继续或按方案执行时，结合已有讨论整理目标、执行计划、依赖和验收方式，"
+        "再按需要分派；简单工作不必为了分工启动多个代理。不用重复确认已经明确授权的工作。\n"
+        "执行任务完成时提供实际文件、测试和产物证据，不要把计划当作已完成的结果。\n"
         "处理约束的顺序：当前项目验收需求 > 当前任务明确要求 > 已确认的项目记忆 > 个人偏好。冲突要指出，不能让记忆覆盖新需求。\n"
+        "recent_messages 可能为控制上下文长度而省略较早对话；conversation_truncated 为 true 时，"
+        "需要较早内容再按需读取 context，不要猜测缺失的约定。\n"
         "memory_snapshot 是领取任务时选出的有限、带版本且已确认的记忆，不代表全部历史。默认保持快照；只有明确需要时才调用 memories(refresh=true)。\n"
         "新得到的长期结论用 propose_memory 提议，等待用户确认；临时日志、猜测和凭据不要写入记忆。\n"
         "验收成员必须读取源任务的实际 commit 和文件，运行适当检查，再提交 report_review，不能仅复述作者结论。\n"
         "integration 若包含依赖冲突，请先检查 git status，解决列出的文件并 add/commit，再逐个 merge 尚未包含的 dependency_commits；"
         "最终每个依赖提交必须成为 HEAD 的祖先，不能跳过冲突或仅复制部分文件。\n"
-        "优先使用 pal_arena MCP 的 context/create_task/update_requirements/report_review/finish_project。\n"
-        "如果当前客户端没有该 MCP，请在最终回复中输出一个 JSON 对象："
+        "确需执行平台操作时可使用 pal_arena MCP 的 context/create_task/update_requirements/report_review/finish_project。\n"
+        "纯讨论直接回答，不使用这些写操作；只有确需执行平台操作且当前客户端没有该 MCP 时，才在最终回复中输出 JSON 对象："
         '{"summary":"本次结果", "arena_actions":[{"action":"create_task","title":"...","prompt":"...",'
         '"capability":"code","acceptance":["..."],"dependencies":[]}]}。'
         "允许的 action 还包括 update_requirements(requirements 数组，可带刚通过 context 读取的 expected_revision 防止覆盖伙伴更新)、"

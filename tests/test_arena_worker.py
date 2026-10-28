@@ -25,6 +25,7 @@ from arena.worker import (
     git,
     load_config,
     prepare_workspace,
+    recent_conversation,
     relay_actions,
     run_pal,
     run_process,
@@ -43,6 +44,15 @@ def job(task_id="task", attempt=1):
         "run_token": "run-secret-token",
         "agent_token": "agent-secret-token",
     }
+
+
+def test_recent_conversation_limits_context_and_keeps_newest_messages():
+    messages = [{"author": str(index), "content": "x" * 2000} for index in range(10)]
+    selected, truncated = recent_conversation(messages, budget=5000)
+    assert [item["author"] for item in selected] == ["7", "8", "9"]
+    assert sum(len(item["content"]) for item in selected) == 5000
+    assert truncated is True
+    assert recent_conversation(messages[:1])[1] is False
 
 
 def test_server_rejects_plain_remote_http_credentials_and_redirects():
@@ -681,6 +691,59 @@ def test_release_configuration_advertises_only_local_profile_names(tmp_path):
     config = load_config(str(config_file))
     assert config["agents"][0]["roles"] == ["publisher"]
     assert config["agents"][0]["capabilities"] == ["release:preview"]
+
+
+def test_discussion_response_does_not_dispatch_workers(tmp_path):
+    from fastapi.testclient import TestClient
+
+    from arena.api import create_app
+
+    app = create_app(tmp_path / "server")
+    owner = (tmp_path / "server" / "owner-token.txt").read_text(encoding="utf-8")
+    member = TestClient(app, headers={"Authorization": "Bearer " + owner})
+    invite = member.post("/api/invites", json={"name": "Fixture PC", "kind": "machine"}).json()
+    project = member.post("/api/projects", json={"name": "Discussion fixture"}).json()
+    sent = member.post(f"/api/projects/{project['id']}/messages", json={"content": "讨论一下要不要做网页"})
+    assert sent.status_code == 201
+    script = tmp_path / "discussion_cli.py"
+    script.write_text(
+        """import json, sys
+prompt = sys.stdin.read()
+assert "纯讨论直接回答" in prompt
+print(json.dumps({"type":"item.completed", "item":{"type":"agent_message", "text":"可以先讨论使用场景和方案。"}}))
+print(json.dumps({"type":"turn.completed"}))
+""",
+        encoding="utf-8",
+    )
+
+    class ASGIAPI(API):
+        def __init__(self, server, token, *args):
+            self.token = token
+            self.client = TestClient(app, headers={"Authorization": "Bearer " + token, "X-Arena-Worker-Protocol": "2"})
+
+    config = {
+        "server": "http://localhost:8765",
+        "workspace_root": str(tmp_path / "workspaces"),
+        "name": "Fixture PC",
+        "slots": 1,
+        "storage_limit_bytes": 5_000_000_000,
+        "agents": [
+            {
+                "key": "leader",
+                "name": "leader",
+                "provider": "codex",
+                "roles": ["leader"],
+                "capabilities": ["planning"],
+                "command": [sys.executable, str(script)],
+            }
+        ],
+    }
+    with patch("arena.worker.API", ASGIAPI):
+        Worker(config, token=invite["token"]).run(once=True)
+    state = member.get("/api/state", params={"project_id": project["id"]}).json()
+    assert [task["kind"] for task in state["tasks"]] == ["leader"]
+    assert any("先讨论使用场景" in message["content"] for message in state["messages"])
+    assert state["projects"][0]["requirements"] == []
 
 
 def test_real_api_and_fake_agents_complete_planning_execution_review_delivery(tmp_path):
