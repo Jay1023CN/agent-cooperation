@@ -158,6 +158,7 @@ pal-arena-worker --config worker.json
 - [x] 桌面交接原型与跨电脑任务占用登记
 - [x] 用成员本人的 GitHub 账号提交和推送，推送前后双重核对作者
 - [x] 用 GitHub 登录工作台；中心续期并按任务下发短期推送凭据
+- [x] 一条命令通过 Tailscale 共享中心，网页显示并自动填入地址
 - [ ] 多台实机、真实订阅下的端到端联调
 - [ ] WorkBuddy 与 Multica 的状态回写
 - [ ] Blender 专用适配和可打开产物的自动检查

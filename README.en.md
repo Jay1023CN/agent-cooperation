@@ -68,6 +68,16 @@ A few more deliberate choices:
 - **Memory needs a human.** "Remember this" proposals from the AI wait for a member's approval; every run pins the exact memory version it used.
 - **Private means private.** Personal chats, their tasks, logs and artifacts are visible only to that person and cannot change shared requirements or confirm shared deliveries.
 
+## Day-to-day
+
+- **`Ctrl K` / `⌘ K` reaches everything**: pages, projects, tasks and actions (new task, connect a computer, switch channel, theme…) in one search box.
+- **Keyboard is enough**: `N` new task, `/` message the lead, `G` then `C` `T` `R` `F` `M` for chat, tasks, review, artifacts, computers.
+- **Unblock in place**: when an agent asks for permission, allow or deny right in the bar at the top; retry a failed task with one click.
+- **Don't miss it in the background**: turn on desktop notifications for approvals and failures; the tab title shows the count.
+- **Links are locations**: the address keeps the project, page and open task (`#/<project>/task/<task>`), so sharing, refreshing and bookmarking land in the same place.
+- **Install it as an app**: use "Install" in the browser address bar, or "Add to Home Screen" on a phone.
+- **Sign in with GitHub, push as yourself**: pick a member in project settings and task commits and pushes appear under their account, whichever computer ran the task.
+
 ## Quick start
 
 You need Python 3.10+, and each computer must already be logged into the clients you plan to use (Claude Code, Codex, Qoder, etc.).
@@ -95,7 +105,7 @@ pal-arena-worker --config worker.json
 
 `doctor` only checks installation and the local connection. It sends no model requests and does not mean your subscription quota is fine. Start with a small read-only task, check the result, files and review, then raise concurrency.
 
-To have commits appear under your own GitHub account, run `pal-arena github login --member <your member ID>` on the computer that pushes code and authorize once in the browser.
+To have commits appear under your own GitHub account, create a GitHub App once ([GitHub sign-in guide](docs/github-login.md), Chinese, about 5 minutes) and click "Connect GitHub" in the web UI. Every computer can then push as you. Without an App, run `pal-arena github login --member <your member ID>` on each computer that pushes code.
 
 Just want to look around? Click "Look at the demo without signing in" on the login page, or open `/?demo=1`.
 
@@ -122,6 +132,8 @@ The upstream PAL `clink` tool and [PAL Agent Link](docs/agent-link.md) are kept:
 - [x] Independent review and up to three automatic revisions; writes stop when a result is unknown, never auto-repeated
 - [x] Desktop handoff prototype and cross-computer task occupancy registry
 - [x] Commit and push under a member's own GitHub account, with the author checked before and after the push
+- [x] Sign in with GitHub; the hub refreshes tokens and hands each task a short-lived push credential
+- [x] One-command Tailscale sharing for the hub, with the address shown and pre-filled in the web UI
 - [ ] End-to-end runs on several real machines with real subscriptions
 - [ ] WorkBuddy and Multica status write-back
 - [ ] Dedicated Blender adapter and automatic checks that artifacts open
