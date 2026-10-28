@@ -9,7 +9,7 @@ import {
   asArray,
   lines,
 } from '../components/ui.js';
-import { renderTaskTimeline, taskTimelineEvents, taskDialogSignature } from './task-timeline.js';
+import { renderTaskTimeline, taskTimelineEvents, taskTimelineCursor } from './task-timeline.js';
 
 export function createTaskDialogs({
   getState,
@@ -146,13 +146,13 @@ export function createTaskDialogs({
       loaded = false,
       events = [],
       nextBefore = null,
-      loadedSignature = '';
+      loadedCursor = 0;
     syncTimeline = () => {
       if (!loaded || !content.isConnected) return;
       const freshState = getState();
       const freshTask = freshState.tasks.find((item) => item.id === task.id);
       const button = $('.timeline-new', content);
-      if (button && freshTask) button.hidden = taskDialogSignature(freshState, freshTask) === loadedSignature;
+      if (button && freshTask) button.hidden = taskTimelineCursor(freshState, freshTask) <= loadedCursor;
     };
     async function load(before = null) {
       if (busy || !content.isConnected) return;
@@ -165,7 +165,7 @@ export function createTaskDialogs({
       try {
         const freshState = getState();
         const freshTask = freshState.tasks.find((item) => item.id === task.id) || task;
-        const signature = taskDialogSignature(freshState, freshTask);
+        const cursor = taskTimelineCursor(freshState, freshTask);
         const query = new URLSearchParams();
         if (before) query.set('before', before);
         const result = demo
@@ -179,7 +179,7 @@ export function createTaskDialogs({
         events = before ? [...result.events, ...events] : result.events;
         nextBefore = result.next_before;
         loaded = true;
-        if (!before) loadedSignature = signature;
+        if (!before) loadedCursor = Math.max(cursor, ...result.events.map((event) => Number(event.id) || 0));
         content.innerHTML = `<button class="button small timeline-new" type="button" hidden>有新记录，刷新</button>${nextBefore ? '<button class="button small timeline-more" type="button">加载较早记录</button>' : ''}${renderTaskTimeline(events)}<p class="form-error timeline-error" role="alert"></p>`;
         $('.timeline-more', content)?.addEventListener('click', () => load(nextBefore));
         $('.timeline-new', content).addEventListener('click', () => load());

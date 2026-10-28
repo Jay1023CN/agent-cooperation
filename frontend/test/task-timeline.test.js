@@ -1,19 +1,22 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderTaskTimeline, taskDialogSignature, taskTimelineEvents } from '../src/views/task-timeline.js';
+import { renderTaskTimeline, taskTimelineCursor, taskTimelineEvents } from '../src/views/task-timeline.js';
 
 test('execution and independent review logs update the task dialog without unrelated events', () => {
   const task = { id: 'work', kind: 'worker', status: 'in_review' };
   const state = { tasks: [task, { id: 'review', kind: 'reviewer', source_id: 'work' }], events: [] };
-  const initial = taskDialogSignature(state, task);
+  const initial = taskTimelineCursor(state, task);
   state.events.push({ id: 1, task_id: 'other' });
-  assert.equal(taskDialogSignature(state, task), initial);
+  assert.equal(taskTimelineCursor(state, task), initial);
   state.events.push({ id: 2, task_id: 'review' });
-  assert.notEqual(taskDialogSignature(state, task), initial);
+  assert.notEqual(taskTimelineCursor(state, task), initial);
   assert.deepEqual(
     taskTimelineEvents(state, task).map((event) => event.id),
     [2],
   );
+  const seen = taskTimelineCursor(state, task);
+  state.events = [{ id: 200, task_id: 'other' }];
+  assert.ok(taskTimelineCursor(state, task) <= seen, 'logs leaving the recent snapshot are not new events');
 });
 
 test('timeline escapes model output and shows the independent review phase', () => {

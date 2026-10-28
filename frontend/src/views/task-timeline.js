@@ -10,9 +10,8 @@ export function taskTimelineEvents(state, task) {
   return state.events.filter((event) => ids.has(event.task_id));
 }
 
-export function taskDialogSignature(state, task) {
-  const lastEvent = Math.max(0, ...taskTimelineEvents(state, task).map((event) => Number(event.id) || 0));
-  return JSON.stringify([task, lastEvent]);
+export function taskTimelineCursor(state, task) {
+  return Math.max(0, ...taskTimelineEvents(state, task).map((event) => Number(event.id) || 0));
 }
 
 export function renderTaskTimeline(events) {
