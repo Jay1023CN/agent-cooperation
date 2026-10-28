@@ -28,7 +28,7 @@ import psutil
 
 from agent_link.acp import ACP
 from agent_link.common import BridgeError
-from agent_link.discovery import antigravity_services, opencode_service, qoder_command
+from agent_link.discovery import ACP_PROVIDERS, acp_command, antigravity_services, opencode_service
 from agent_link.github_identity import GitHubIdentityError
 from agent_link.server import Agents
 
@@ -219,10 +219,10 @@ def inspect_agent(agent, *, probe_transport=True):
             report.update(
                 installed=True, reason="CLI executable found; login, subscription and model access are unverified"
             )
-        elif provider in ("qoder", "qodercn"):
-            command = qoder_command(provider, settings)
+        elif provider in ACP_PROVIDERS:
+            command = acp_command(provider, settings)
             if not shutil.which(command[0]):
-                raise WorkerError("Qoder ACP executable is unavailable")
+                raise WorkerError(f"{provider} ACP executable is unavailable")
             report.update(
                 installed=True,
                 reason="ACP executable found; desktop chat takeover is unsupported; login remains unverified",
@@ -1253,8 +1253,6 @@ def run_pal(agent, workspace, prompt, env, api, cancel, on_output, timeout):
     settings = dict(agent.get("adapter", {}))
     if agent.get("command"):
         settings["command"] = agent["command"]
-    if provider in ("qoder", "qodercn"):
-        settings["command"], env = external_process(qoder_command(provider, settings), env)
     adapter = (
         ArenaACP(
             provider,
@@ -1262,7 +1260,7 @@ def run_pal(agent, workspace, prompt, env, api, cancel, on_output, timeout):
             {k: env[k] for k in ("ARENA_SERVER", "ARENA_RUN_TOKEN", "ARENA_ALLOW_HTTP")},
             process_env=env,
         )
-        if provider in ("qoder", "qodercn")
+        if provider in ACP_PROVIDERS
         else Agents({provider: settings}).get(provider)
     )
     session_id = agent.get("session_id") if agent.get("mode") == "existing" else None
@@ -1742,7 +1740,7 @@ class Worker:
                 and path
                 and branch
                 and not evidence.get("commit")
-                and agent["provider"] in CLI_PROVIDERS | {"qoder", "qodercn"}
+                and agent["provider"] in CLI_PROVIDERS | ACP_PROVIDERS
                 and path.is_relative_to(self.root)
             ):
                 with contextlib.suppress(WorkerError, OSError):

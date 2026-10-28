@@ -16,7 +16,7 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: python -m pip install -e ".[platform]" pytest pytest-asyncio
-      - run: python -m pytest tests/test_agentlink_contracts.py tests/test_agentlink_tool.py tests/test_agentlink_multica.py tests/test_agentlink_acp_client.py tests/test_agentlink_assignment.py -q
+      - run: python -m pytest tests/test_agentlink_contracts.py tests/test_agentlink_tool.py tests/test_agentlink_multica.py tests/test_agentlink_acp_client.py tests/test_agentlink_assignment.py tests/test_dsh_harness.py -q
       - name: Arena orchestration and worker contracts
         env:
           PYTHONUTF8: '1'

@@ -26,6 +26,11 @@ export const providerInfo = {
     note: '国内版 Qoder ACP 独立适配；需要可用的官方 ACP 可执行文件。',
     existing: false,
   },
+  dsh: {
+    label: 'DeepSeek Harness · ACP',
+    note: '使用 DSH 的 ACP profile；请先在 DSH 中配置所需模型和服务商。可在高级设置中指定自己的 ACP profile。',
+    existing: false,
+  },
   antigravity: {
     label: 'Antigravity 桌面版',
     note: '连接正在运行的桌面后端，支持新任务或指定已有会话；模型 ID 需要与本机模型列表一致。',
@@ -70,7 +75,7 @@ export function setupAgentRow(index, value = {}) {
     )
     .join(
       '',
-    )}<div class="field"><label>最高承接难度<select name="max-difficulty-${index}"><option value="routine">常规</option><option value="standard">标准</option><option value="deep" selected>深入</option></select></label></div></div><div class="form-row"><div class="field"><label>上下文容量<input type="number" name="context-window-${index}" min="1" max="10000000" placeholder="未声明"></label></div><div class="field"><label>订阅额度状态<select name="quota-${index}"><option value="unknown">未知</option><option value="available">自行确认可用</option><option value="limited">额度紧张</option><option value="exhausted">已耗尽，暂停分派</option></select></label></div></div><p class="provider-explanation">这些是你对模型的偏好声明，结合任务难度和实际运行记录使用；平台不估算订阅的真实价格或剩余额度。</p></details><details><summary>已有桌面会话与可执行路径</summary><div class="field"><label>会话模式<select name="mode-${index}"><option value="new">新建任务会话</option><option value="existing">接续指定桌面会话（仅支持的适配器）</option></select></label></div><div class="field"><label>已有会话 ID<input name="session-${index}" placeholder="接续已有会话时必填"></label></div><div class="field"><label>已有会话的绝对工作目录<input name="workspace-${index}" placeholder="该会话实际使用的本机目录"></label></div><div class="field"><label>可执行文件路径<input name="command-${index}" placeholder="可选：不在 PATH 中时填写完整路径"></label></div></details></section>`;
+    )}<div class="field"><label>最高承接难度<select name="max-difficulty-${index}"><option value="routine">常规</option><option value="standard">标准</option><option value="deep" selected>深入</option></select></label></div></div><div class="form-row"><div class="field"><label>上下文容量<input type="number" name="context-window-${index}" min="1" max="10000000" placeholder="未声明"></label></div><div class="field"><label>订阅额度状态<select name="quota-${index}"><option value="unknown">未知</option><option value="available">自行确认可用</option><option value="limited">额度紧张</option><option value="exhausted">已耗尽，暂停分派</option></select></label></div></div><p class="provider-explanation">这些是你对模型的偏好声明，结合任务难度和实际运行记录使用；平台不估算订阅的真实价格或剩余额度。</p></details><details><summary>已有桌面会话与可执行路径</summary><div class="field"><label>会话模式<select name="mode-${index}"><option value="new">新建任务会话</option><option value="existing">接续指定桌面会话（仅支持的适配器）</option></select></label></div><div class="field"><label>已有会话 ID<input name="session-${index}" placeholder="接续已有会话时必填"></label></div><div class="field"><label>已有会话的绝对工作目录<input name="workspace-${index}" placeholder="该会话实际使用的本机目录"></label></div><div class="field"><label>可执行文件路径<input name="command-${index}" placeholder="可选：不在 PATH 中时填写完整路径"></label></div><div class="field"><label>DSH ACP profile（仅 DSH 使用）<input name="dsh-profile-${index}" value="${e(value.adapter?.profile || '')}" placeholder="acp"></label><small>填写已配置模型的 ACP profile 名称；留空使用 acp。</small></div></details></section>`;
 }
 export function machineSetupHTML(invite, address = null) {
   const server = address?.state === 'shared' && address.url ? address.url : location.origin;
@@ -139,6 +144,11 @@ export function collectWorkerConfig(name = 'My computer') {
       if (!agent.session_id || !agent.workspace)
         throw new Error('接续已有会话需要会话 ID 和该会话的绝对工作目录。');
       if (provider === 'antigravity' && model) agent.adapter = { model };
+    }
+    if (provider === 'dsh') {
+      const acpProfile = String(form.get(`dsh-profile-${i}`) || 'acp').trim() || 'acp';
+      if (acpProfile.startsWith('-')) throw new Error('DSH profile 应为名称，不能填写命令参数。');
+      agent.adapter = { profile: acpProfile };
     }
     const command = String(form.get(`command-${i}`) || '').trim();
     if (command) agent.command = [command];

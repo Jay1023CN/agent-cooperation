@@ -69,7 +69,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--workspace", required=True, help="Existing disposable absolute directory")
     parser.add_argument(
-        "--agents", nargs="+", choices=["opencode", "qoder", "qodercn"], default=["opencode", "qoder", "qodercn"]
+        "--agents", nargs="+", choices=["opencode", "qoder", "qodercn", "dsh"], default=["opencode", "qoder", "qodercn"]
     )
     parser.add_argument(
         "--opencode-model", help="Optional provider/model identifier; otherwise uses configured default"

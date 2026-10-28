@@ -32,6 +32,8 @@ pal-arena share
 
 ## 配置实际能运行的成员
 
+DeepSeek Harness 作为 `dsh` 执行端通过 ACP 接入，模型沿用 DSH profile 的配置；自定义模型路由和配置示例见 [DSH 接入说明](dsh-harness.md)。
+
 配置生成命令只提供模板。以下结构展示三个分工，并不代表电脑已安装或登录对应客户端：
 
 ```json

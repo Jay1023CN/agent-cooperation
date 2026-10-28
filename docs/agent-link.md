@@ -52,7 +52,7 @@ pal-agent-link --check
 | `permissions` | `agent`、`session_id` |
 | `permission_reply` | `agent`、`permission_id`、`option_id`；省略 option_id 表示取消 |
 
-`agent` 可取 `antigravity`、`opencode`、`qoder`、`qodercn`、`workbuddy`。`workspace` 必须是本机已存在的绝对目录。Antigravity 创建会话需要指定 `agent_model`；先用 `models` 查询。OpenCode 模型格式为 `provider/model`。WorkBuddy 仅使用固定的本地助理会话，其工作目录和模型在客户端中设置。
+`agent` 可取 `antigravity`、`opencode`、`qoder`、`qodercn`、`dsh`、`workbuddy`。`workspace` 必须是本机已存在的绝对目录。Antigravity 创建会话需要指定 `agent_model`；先用 `models` 查询。OpenCode 模型格式为 `provider/model`。WorkBuddy 仅使用固定的本地助理会话，其工作目录和模型在客户端中设置。
 
 ## 独立桥接入口
 
@@ -86,6 +86,7 @@ WorkBuddy 的 Arena 桌面 MCP 交接与下面的旧 Open API 是两条独立路
   },
   "qoder": {"command": ["qodercli"]},
   "qodercn": {"command": ["qoderclicn"]},
+  "dsh": {"profile": "cooperation"},
   "workbuddy": {"token_env": "WORKBUDDY_ACCESS_TOKEN"}
 }
 ```
@@ -125,3 +126,7 @@ python scripts/agentlink_smoke.py --workspace /absolute/path/to/scratch --agents
 项目使用 Apache-2.0 许可证。新增契约测试已在 GitHub Actions 的 Windows、Linux、macOS 上通过，覆盖 Python 3.10 / 3.12。真实客户端验证情况见[验证记录](agent-link-release.md)。用户配置、登录态和真实测试会话不属于发布内容。
 
 接口参考：[Qoder ACP](https://docs.qoder.com/cli/acp)、[Qoder CN 参数](https://docs.qoder.cn/cli/cli-reference)、[OpenCode Server](https://opencode.ai/docs/server/)、[WorkBuddy Open API](https://open.workbuddy.cn/docs/openapi)。OpenCode 2.x 的本次适配同时核对了客户端自带的 HTTP 客户端代码。
+
+## DeepSeek Harness（DSH）
+
+DSH 作为独立 harness 接入，使用 `dsh --profile <名称>` 提供的 ACP stdio，不指定模型供应商，也不接管桌面中的已有聊天。模型及凭证由 DSH 自己管理。配置方法与当前验证范围见 [DSH 接入说明](dsh-harness.md)。

@@ -17,7 +17,7 @@ from .workbuddy import WorkBuddy
 
 
 class Agents:
-    names = ("antigravity", "opencode", "qoder", "qodercn", "workbuddy")
+    names = ("antigravity", "opencode", "qoder", "qodercn", "dsh", "workbuddy")
 
     def __init__(self, config=None):
         self.config = config or {}
@@ -148,7 +148,7 @@ def build_server(agents):
 
     @mcp.tool()
     def agent_models(agent: str) -> dict:
-        """List models. Qoder ACP needs a created session before reporting its model list."""
+        """List models. ACP agents need a created session before reporting their model options."""
         return {"models": agents.get(agent).models()}
 
     @mcp.tool()
@@ -156,7 +156,7 @@ def build_server(agents):
         """Create a coding session in an existing absolute workspace.
 
         Antigravity requires a model ID. OpenCode model format is provider/model.
-        Qoder uses ACP and does not take over an existing desktop IDE chat.
+        ACP agents create separate sessions and do not take over an existing desktop IDE chat.
         WorkBuddy exposes its existing local-assistant session instead.
         """
         return agents.get(agent).create(workspace, title, model)
@@ -182,21 +182,21 @@ def build_server(agents):
 
     @mcp.tool()
     def agent_permissions(agent: str, session_id: str) -> dict:
-        """Inspect Qoder ACP pending permission requests; no automatic approval."""
+        """Inspect ACP pending permission requests; no automatic approval."""
         adapter = agents.get(agent)
         if not isinstance(adapter, ACP):
-            raise BridgeError("This tool currently supports Qoder ACP only. Handle other approvals in their app.")
+            raise BridgeError("This tool currently supports ACP only. Handle other approvals in their app.")
         return {"permissions": adapter.permissions(session_id)}
 
     @mcp.tool()
     def agent_permission_reply(agent: str, permission_id: str, option_id: str | None = None) -> dict:
-        """Answer a pending Qoder ACP permission. Use an option ID returned by agent_permissions.
+        """Answer a pending ACP permission. Use an option ID returned by agent_permissions.
 
         Null option cancels. Select an approval only when the underlying action is authorized by the user.
         """
         adapter = agents.get(agent)
         if not isinstance(adapter, ACP):
-            raise BridgeError("Permission replies currently support Qoder ACP only.")
+            raise BridgeError("Permission replies currently support ACP only.")
         return adapter.reply(permission_id, option_id)
 
     return mcp

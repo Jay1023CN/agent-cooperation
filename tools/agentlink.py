@@ -34,7 +34,7 @@ class AgentLinkRequest(BaseModel):
         "handoff_status",
         "handoff_submit",
     ]
-    agent: Optional[Literal["antigravity", "opencode", "qoder", "qodercn", "workbuddy"]] = None
+    agent: Optional[Literal["antigravity", "opencode", "qoder", "qodercn", "dsh", "workbuddy"]] = None
     workspace: Optional[str] = None
     title: str = "PAL Agent Link"
     agent_model: Optional[str] = Field(default=None, description="Agent model ID; not a PAL API-provider model.")
@@ -64,7 +64,7 @@ class AgentLinkTool(BaseTool):
 
     def get_description(self) -> str:
         return (
-            "Dispatch tasks to Antigravity desktop sessions, OpenCode desktop services, Qoder/Qoder CN ACP agents, "
+            "Dispatch tasks to Antigravity desktop sessions, OpenCode desktop services, Qoder/Qoder CN or DSH ACP agents, "
             "and the WorkBuddy local assistant. Use action=status to discover connections, create/send to submit, "
             "and read/wait for actual results. Qoder ACP does not control an existing IDE chat. "
             "WorkBuddy needs official OAuth. Submitting may edit workspace files; never automatically retry "
@@ -111,7 +111,7 @@ class AgentLinkTool(BaseTool):
             return adapter.create(self._required(request.workspace, "workspace"), request.title, request.agent_model)
         if request.action in ("permissions", "permission_reply"):
             if not isinstance(adapter, ACP):
-                raise BridgeError("Permission tools currently support Qoder ACP only.")
+                raise BridgeError("Permission tools currently support ACP agents only.")
             if request.action == "permission_reply":
                 return adapter.reply(self._required(request.permission_id, "permission_id"), request.option_id)
             return {"permissions": adapter.permissions(self._required(request.session_id, "session_id"))}

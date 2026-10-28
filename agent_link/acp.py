@@ -10,7 +10,7 @@ from collections import deque
 
 from .acp_client import ClientResources, external_process, stop_tree, without_multica_context
 from .common import BridgeError, workspace_path
-from .discovery import qoder_command
+from .discovery import acp_launch_command
 from .process_owner import spawn_owned
 
 
@@ -44,8 +44,8 @@ class ACP:
                 raise BridgeError(
                     "This ACP process has ended or failed initialization; create a fresh adapter or restart its MCP server."
                 )
-            command = qoder_command(self.name, self.config)
-            command, environment = external_process([*command, "--acp"], without_multica_context(self.process_env))
+            command = acp_launch_command(self.name, self.config)
+            command, environment = external_process(command, without_multica_context(self.process_env))
             self.closed.clear()
             self.resources = ClientResources(self._session, self._authorize, environment=self.process_env)
             self.process = spawn_owned(
@@ -360,7 +360,14 @@ class ACP:
             }
             self.sessions_data[sid]["done"].set()
         if model:
-            self.call("session/set_model", {"sessionId": sid, "modelId": model})
+            if self.name == "dsh":
+                selected = self.call(
+                    "session/set_config_option", {"sessionId": sid, "configId": "model", "value": model}
+                )
+                with self.lock:
+                    self.sessions_data[sid]["details"]["configOptions"] = selected.get("configOptions", [])
+            else:
+                self.call("session/set_model", {"sessionId": sid, "modelId": model})
         return {"id": sid, "details": result}
 
     def sessions(self, limit=30):
@@ -372,6 +379,13 @@ class ACP:
 
     def models(self):
         with self.lock:
+            if self.name == "dsh":
+                return [
+                    option
+                    for session in list(self.sessions_data.values())[-1:]
+                    for option in session["details"].get("configOptions", [])
+                    if option.get("category") == "model" or option.get("id") == "model"
+                ]
             return [s["details"].get("models", {}) for s in self.sessions_data.values()][-1:]
 
     def send(self, session_id, prompt):
