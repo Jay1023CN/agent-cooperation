@@ -2,6 +2,48 @@
 
 <!-- version list -->
 
+## v1.7.0 (2026-10-28)
+
+### Chores
+
+- Sync version to config.py [skip ci]
+  ([`73f3f74`](https://github.com/Jay1023CN/agent-cooperation/commit/73f3f748b5e38cf5d724e1db1f3becaed30c0c0f))
+
+### Documentation
+
+- README 摘要与英文版，新增 X 发布方案 ([#1](https://github.com/Jay1023CN/agent-cooperation/pull/1),
+  [`82d33cd`](https://github.com/Jay1023CN/agent-cooperation/commit/82d33cd75ecc3eb8677d88f3d4e1f9074471c174))
+
+- **launch**: X 发布方案——调研、规律、三条 thread、短帖、节奏
+  ([#1](https://github.com/Jay1023CN/agent-cooperation/pull/1),
+  [`82d33cd`](https://github.com/Jay1023CN/agent-cooperation/commit/82d33cd75ecc3eb8677d88f3d4e1f9074471c174))
+
+- **launch**: X 发布方案——调研、规律、三条 thread、短帖、节奏
+  ([`6ff0c55`](https://github.com/Jay1023CN/agent-cooperation/commit/6ff0c55e146c089e7cf5e24e3a90effa0f2bb511))
+
+- **readme**: 增加三格亮点卡片，把小细节折叠
+  ([`da5551e`](https://github.com/Jay1023CN/agent-cooperation/commit/da5551e9ff4c96b1923497dc7c3581d325d3ceb4))
+
+- **readme**: 英文版补上 GitHub 登录、一键共享与日常快捷操作
+  ([`b8496ec`](https://github.com/Jay1023CN/agent-cooperation/commit/b8496ecd041bda65cb155f34db899281332cc2ad))
+
+- **readme**: 补一句话摘要、适用范围，新增英文 README ([#1](https://github.com/Jay1023CN/agent-cooperation/pull/1),
+  [`82d33cd`](https://github.com/Jay1023CN/agent-cooperation/commit/82d33cd75ecc3eb8677d88f3d4e1f9074471c174))
+
+- **readme**: 补一句话摘要、适用范围，新增英文 README
+  ([`4492498`](https://github.com/Jay1023CN/agent-cooperation/commit/4492498b89863c5cb13df34beee454a65b75ffba))
+
+### Features
+
+- 现有 Pal 会话支持本机文档交接并记录桌面实测
+  ([`289ea17`](https://github.com/Jay1023CN/agent-cooperation/commit/289ea17270686f6c8108ccb779ace963ffc0669a))
+
+### Testing
+
+- Windows 缺少符号链接权限时跳过对应用例
+  ([`2b73e9c`](https://github.com/Jay1023CN/agent-cooperation/commit/2b73e9c0bdb9c76378764fd3a452aee508d65e84))
+
+
 ## v1.6.0 (2026-10-28)
 
 ### Chores
