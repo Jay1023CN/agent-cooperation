@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.8.1 (2026-10-28)
+
+### Bug Fixes
+
+- 无关任务日志滚动时不误报新的时间线记录
+  ([`2202917`](https://github.com/Jay1023CN/agent-cooperation/commit/2202917ee2fbc864745b61b745536c48d9a84b88))
+
+### Chores
+
+- Sync version to config.py [skip ci]
+  ([`2e15d9e`](https://github.com/Jay1023CN/agent-cooperation/commit/2e15d9ec54db24c413125299e4dcbef5aada36d8))
+
+
 ## v1.8.0 (2026-10-28)
 
 ### Chores
