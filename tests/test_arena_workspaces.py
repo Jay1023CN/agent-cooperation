@@ -260,7 +260,12 @@ def test_symlinked_workspace_and_external_directories_are_never_removed(complete
     source = records[0]["workspace"]
     outside = tmp_path / "outside"
     source.rename(outside)
-    source.symlink_to(outside, target_is_directory=True)
+    try:
+        source.symlink_to(outside, target_is_directory=True)
+    except OSError as exc:
+        if os.name == "nt" and getattr(exc, "winerror", None) == 1314:
+            pytest.skip("This Windows account cannot create directory symlinks")
+        raise
     (root / "unmanaged").mkdir()
     (root / "unmanaged" / "unique.txt").write_text("keep", encoding="utf-8")
     result = workspaces.plan(root, statuses, lambda *_: True)
