@@ -29,7 +29,14 @@ import {
   collectWorkerConfig,
   showWorkerCommands,
 } from './views/connection.js';
-import { renderOverview, renderStats, renderFleet, renderAgents, openAgent } from './views/dashboard.js';
+import {
+  renderOverview,
+  renderStats,
+  renderAttention,
+  renderFleet,
+  renderAgents,
+  openAgent,
+} from './views/dashboard.js';
 import { createTaskDialogs } from './views/tasks.js';
 import { createProjectDialogs } from './views/projects.js';
 import { demoState } from './data/demo.js';
@@ -106,8 +113,18 @@ function showApp() {
   $('#app').hidden = false;
   $('#login-screen').hidden = true;
   $('#demo-banner').hidden = !demo;
-  $('#user-name').textContent = identity?.name || '你和 Partner';
+  $('#user-name').textContent = identity?.name || '你';
   $('#user-avatar').textContent = (identity?.name || 'Y').slice(0, 1).toUpperCase();
+}
+function setCount(selector, value, quiet = false) {
+  const node = $(selector);
+  node.textContent = String(value);
+  node.classList.toggle('quiet', quiet || !value);
+}
+function fitComposer() {
+  const input = $('#message-input');
+  input.style.height = 'auto';
+  input.style.height = `${Math.min(input.scrollHeight, 220)}px`;
 }
 function setConnection(ok, label) {
   $('#connection-status').className = `connection-indicator${ok ? '' : ' error'}`;
@@ -142,10 +159,10 @@ async function refresh(force = false) {
     if (currentProject && !state.projects.some((item) => item.id === currentProject))
       currentProject = state.projects[0]?.id || null;
     render();
-    setConnection(true, demo ? '效果预览' : '已连接 · 实时同步');
+    setConnection(true, demo ? '示例数据' : '已同步');
     if (activeView === 'memory' && project()) await loadMemories(false);
   } catch (error) {
-    setConnection(false, '连接暂不可用');
+    setConnection(false, '连不上中心');
     if (force) toast(error.message, true);
   } finally {
     if (serial === refreshSerial) pollInFlight = false;
@@ -153,9 +170,9 @@ async function refresh(force = false) {
 }
 function render() {
   const p = project();
-  $('#breadcrumb-project').textContent = p?.name || '开始你的项目';
-  $('#project-name').textContent = p?.name || '你的下一件作品';
-  $('#project-description').textContent = p?.brief || '创建一个项目，和伙伴一起描述目标，再让成员加入协作。';
+  $('#breadcrumb-project').textContent = p?.name || '未选择项目';
+  $('#project-name').textContent = p?.name || '还没有项目';
+  $('#project-description').textContent = p?.brief || '新建一个项目，写下目标和完成条件。';
   $('#project-status').textContent = statusLabels[p?.status] || '准备开始';
   $('#requirement-revision').textContent = `v${p?.revision || 1}`;
   $('#project-list').innerHTML = state.projects.length
@@ -165,19 +182,21 @@ function render() {
             `<button class="project-item ${item.id === currentProject ? 'active' : ''}" data-action="project" data-id="${e(item.id)}"><span class="project-dot"></span><span>${e(item.name)}</span></button>`,
         )
         .join('')
-    : '<p class="empty-small">还没有项目。点击 +，开始你的第一件作品。</p>';
-  $('#task-nav-count').textContent = String(
+    : '<p class="empty-small">还没有项目，点 + 新建。</p>';
+  setCount(
+    '#task-nav-count',
     state.tasks.filter((task) => ['queued', 'running'].includes(task.status)).length,
   );
-  $('#review-nav-count').textContent = String(
-    state.tasks.filter((task) => task.status === 'in_review').length,
-  );
+  setCount('#review-nav-count', state.tasks.filter((task) => task.status === 'in_review').length);
+  setCount('#machine-nav-count', state.machines.filter((machine) => machine.online).length, true);
   const used = state.storage?.used || 0,
     quota = state.storage?.quota || 5e9,
     percent = Math.min(100, (used / quota) * 100);
   $('#sidebar-storage').innerHTML =
-    `<div class="storage-heading"><span>Mac mini 暂存</span><strong>${size(used)} / ${size(quota)}</strong></div><div class="progress-track"><span style="width:${percent.toFixed(1)}%"></span></div><div class="storage-sub"><span>保留工作与近期成果</span><span>${percent.toFixed(0)}%</span></div>`;
+    `<div class="storage-heading"><span>中心暂存</span><strong>${percent.toFixed(0)}%</strong></div><div class="progress-track"><span style="width:${percent.toFixed(1)}%"></span></div><div class="storage-sub"><span>${size(used)} / ${size(quota)}</span></div>`;
   renderStats(state);
+  const attention = renderAttention(state);
+  document.title = attention ? `(${attention}) Agent Cooperation` : 'Agent Cooperation';
   renderFleet(state);
   renderAgents(state);
   renderMessages();
@@ -191,13 +210,15 @@ function render() {
   $('#message-input').disabled = !p || demo;
   $('#message-form button').disabled = !p || demo || messageSending;
   $('#message-input').placeholder = demo
-    ? '效果预览 · 进入实际工作台后即可和负责人对话'
+    ? '示例模式不能发送消息'
     : p
-      ? '描述你的想法，或告诉负责人下一步怎么做…'
-      : '先创建一个项目，再开始对话…';
+      ? channel === 'personal'
+        ? '先和负责人私下理清想法…'
+        : '说说要做什么，或者告诉负责人下一步…'
+      : '先新建一个项目';
   $('#channel-note').hidden = channel !== 'personal';
-  $('#channel-note').textContent =
-    '个人对话与结果仅你可见。需要团队执行的要求，请发到团队共享，由负责人更新共同需求。';
+  $('#channel-note').textContent = '私聊只有你能看到，不会改动共享需求。想让团队动手，把结论发到团队频道。';
+  $('#channel-scope').textContent = channel === 'personal' ? '只有你能看到' : '你和伙伴都能看到';
   const readyLeader = state.agents.some(
     (agent) =>
       agent.enabled &&
@@ -206,10 +227,10 @@ function render() {
   );
   $('#composer-hint').textContent =
     !readyLeader && !demo
-      ? '负责人未连接，消息将保存并等待分派'
+      ? '负责人还没上线，消息会先存着'
       : channel === 'personal'
-        ? '负责人会在个人对话中回应，项目需求保持共享'
-        : '负责人将结合需求清单安排成员';
+        ? '负责人会在私聊里回复'
+        : '负责人会按需求清单拆分任务';
   $$('[data-action="channel"]').forEach((node) =>
     node.classList.toggle('active', node.dataset.channel === channel),
   );
@@ -233,21 +254,21 @@ function renderMessages() {
   if (!visible.length) {
     list.innerHTML = project()
       ? emptyState(
-          channel === 'personal' ? '先聊聊你的想法' : '先和负责人说说你的目标',
+          channel === 'personal' ? '私下先聊聊' : '从目标开始',
           channel === 'personal'
-            ? '这里的讨论仅你可见。确定要一起推进时，可以再发到团队共享。'
-            : '比赛题目、你想解决的问题、最终作品的样子，都可以作为第一句话。',
+            ? '这里只有你能看到。想清楚了，再把结论发到团队频道。'
+            : '比赛题目、要解决的问题、最终作品长什么样，都可以是第一句话。',
         )
       : emptyState(
-          '让团队围绕一个目标开始',
-          '创建项目、写下需求，并邀请你和 partner 的电脑加入。',
+          '先建一个项目',
+          '项目里放目标、代码仓库和完成条件。之后你们在这里和负责人对话。',
           'new-project',
-          '创建第一个项目',
+          '新建项目',
         );
     return;
   }
   list.innerHTML =
-    `<div class="date-line">项目对话</div>` +
+    `<div class="date-line">${channel === 'personal' ? '私聊' : '团队频道'}</div>` +
     visible
       .map((message, index) => {
         const isAgent =
@@ -256,7 +277,7 @@ function renderMessages() {
           demo && channel === 'shared' && index === visible.length - 1
             ? state.tasks.filter((task) => task.kind === 'worker').slice(0, 3)
             : [];
-        return `<article class="message ${isAgent ? 'agent' : ''}"><span class="message-avatar">${isAgent ? icon('spark') : e(message.author.slice(0, 1).toUpperCase())}</span><div class="message-body"><div class="message-meta"><strong>${e(message.author)}</strong>${isAgent ? '<span class="pill">AGENT</span>' : ''}<time>${timeLabel(message.created)}</time></div><div class="message-text">${e(message.content)}</div>${taskLinks.length ? `<div class="message-task-links">${taskLinks.map((task) => `<button class="inline-task" data-action="task" data-id="${e(task.id)}"><span>${icon(task.capability === 'blender' ? 'cube' : 'branch')}</span><span>${e(task.title)}</span>${status(task.status)}<span aria-hidden="true">↗</span></button>`).join('')}</div>` : ''}${channel === 'personal' ? `<button class="text-link" style="margin-top:9px" data-action="share-message" data-id="${e(message.id)}">复制到团队输入框 ↗</button>` : ''}</div></article>`;
+        return `<article class="message ${isAgent ? 'agent' : ''}"><span class="message-avatar">${isAgent ? icon('spark') : e(message.author.slice(0, 1).toUpperCase())}</span><div class="message-body"><div class="message-meta"><strong>${e(message.author)}</strong>${isAgent ? '<span class="message-role">AI 成员</span>' : ''}<time>${timeLabel(message.created)}</time></div><div class="message-text">${e(message.content)}</div>${taskLinks.length ? `<div class="message-task-links">${taskLinks.map((task) => `<button class="inline-task status-${e(task.status)}" data-action="task" data-id="${e(task.id)}"><span>${icon(task.capability === 'blender' ? 'cube' : 'branch')}</span><span>${e(task.title)}</span>${status(task.status)}</button>`).join('')}</div>` : ''}${channel === 'personal' ? `<button class="text-link" style="margin-top:6px" data-action="share-message" data-id="${e(message.id)}">放到团队频道输入框</button>` : ''}</div></article>`;
       })
       .join('');
   if (nearBottom || visible.length <= 3) list.scrollTop = list.scrollHeight;
@@ -267,7 +288,6 @@ function navigate(view) {
   $('.main').dataset.view = view;
   $('.context-panel').hidden = view !== 'chat';
   $('.content-grid').classList.toggle('single-panel', view !== 'chat');
-  $('.work-tabs').hidden = view === 'machines';
   $$('.view-panel').forEach((node) => {
     node.hidden = node.id !== `view-${view}`;
   });
@@ -338,7 +358,7 @@ function openInvite(kind = 'member') {
   openModal(
     '让伙伴和电脑加入',
     '成员令牌和电脑令牌互相独立。',
-    `<div class="field"><label for="f-invite-kind">连接类型</label><select name="kind" id="f-invite-kind"><option value="member" ${kind === 'member' ? 'selected' : ''}>伙伴 · 加入共享工作台</option><option value="machine" ${kind === 'machine' ? 'selected' : ''}>电脑 · 提供执行能力</option></select></div><div class="field"><label for="f-invite-name">显示名称</label><input id="f-invite-name" name="name" required maxlength="100" placeholder="Partner / Mac mini / 天选 6 Pro"></div><div class="notice">Mac mini 没有公网 IP 时，在双方电脑安装 Tailscale，加入同一私有网络。执行端主动连接 Mac mini，不需要开放路由器端口。</div>${modalActions('生成专属令牌')}`,
+    `<div class="field"><label for="f-invite-kind">连接类型</label><select name="kind" id="f-invite-kind"><option value="member" ${kind === 'member' ? 'selected' : ''}>伙伴 · 加入共享工作台</option><option value="machine" ${kind === 'machine' ? 'selected' : ''}>电脑 · 提供执行能力</option></select></div><div class="field"><label for="f-invite-name">显示名称</label><input id="f-invite-name" name="name" required maxlength="100" placeholder="伙伴的名字，或这台电脑的名字"></div><div class="notice">中心那台电脑没有公网 IP 时，让所有电脑加入同一个 Tailscale 网络。执行端主动连接中心，不需要开放路由器端口。</div>${modalActions('生成专属令牌')}`,
     async (form) => {
       const invite = await post('/api/invites', { name: form.get('name').trim(), kind: form.get('kind') });
       renderInviteResult(invite);
@@ -442,7 +462,7 @@ function openSetupHelp() {
   openModal(
     '连接前，先跑通这四步',
     '先连中心，再连电脑，最后验证实际任务。',
-    `<ol class="setup-steps"><li><strong>启动 Mac mini 中心</strong><p>在安装好的环境运行：</p><pre>pal-arena serve</pre><p>首次访问用数据目录中的 <code>owner-token.txt</code> 登录。服务默认仅监听本机。</p></li><li><strong>给 partner 和其他电脑一个可访问的地址</strong><p>四台电脑加入同一 Tailscale 网络，在 Mac mini 运行：</p><pre>tailscale serve --bg http://127.0.0.1:8765</pre><p>使用它给出的 HTTPS 地址访问工作台。其他电脑的配置里不能写 <code>localhost</code> 或 <code>127.0.0.1</code>。</p></li><li><strong>连接每台执行电脑</strong><p>在「伙伴与电脑」生成电脑专属令牌，选择本机客户端并下载配置。Mac 与 Windows 都在安装 PAL 的 Python 环境运行：</p><pre>pal-arena doctor --config worker.json\npython -m arena.worker --config worker.json</pre><p>令牌放在 <code>ARENA_MACHINE_TOKEN</code> 环境变量中。自检通过不代表订阅额度或账号权限已通过实测。</p></li><li><strong>完成一次真实小任务</strong><p>先给负责人发一个只读检查任务，再在临时项目中写一个测试文件。核对任务结果、实际文件和独立验收；然后才扩大并发。</p></li></ol><div class="notice">Codex、Claude、Gemini 桌面应用不等于已安装可用的 CLI。Qoder 当前通过 ACP 新建会话；Antigravity 可连接桌面后端。GLM 等模型由你正在使用的客户端承载，填写对应客户端的模型 ID。模型名称和可用额度以各电脑实际情况为准。</div><div class="modal-actions"><button class="button primary" type="button" data-action="invite-machine">连接一台电脑</button><button class="button" type="button" data-action="close-modal">关闭</button></div>`,
+    `<ol class="setup-steps"><li><strong>在一台常开的电脑上启动中心</strong><p>在安装好的环境运行：</p><pre>pal-arena serve</pre><p>首次访问用数据目录中的 <code>owner-token.txt</code> 登录。服务默认仅监听本机。</p></li><li><strong>给伙伴和其他电脑一个可访问的地址</strong><p>所有电脑加入同一 Tailscale 网络，在中心那台电脑上运行：</p><pre>tailscale serve --bg http://127.0.0.1:8765</pre><p>使用它给出的 HTTPS 地址访问工作台。其他电脑的配置里不能写 <code>localhost</code> 或 <code>127.0.0.1</code>。</p></li><li><strong>连接每台执行电脑</strong><p>在「电脑与成员」生成电脑专属令牌，选择本机客户端并下载配置。Mac 与 Windows 都在安装 PAL 的 Python 环境运行：</p><pre>pal-arena doctor --config worker.json\npal-arena-worker --config worker.json</pre><p>令牌放在 <code>ARENA_MACHINE_TOKEN</code> 环境变量中。自检通过不代表订阅额度或账号权限已通过实测。</p></li><li><strong>完成一次真实小任务</strong><p>先给负责人发一个只读检查任务，再在临时项目中写一个测试文件。核对任务结果、实际文件和独立验收；然后才扩大并发。</p></li></ol><div class="notice">Codex、Claude、Gemini 桌面应用不等于已安装可用的 CLI。Qoder 当前通过 ACP 新建会话；Antigravity 可连接桌面后端。GLM 等模型由你正在使用的客户端承载，填写对应客户端的模型 ID。模型名称和可用额度以各电脑实际情况为准。</div><div class="modal-actions"><button class="button primary" type="button" data-action="invite-machine">连接一台电脑</button><button class="button" type="button" data-action="close-modal">关闭</button></div>`,
   );
 }
 function renderInviteResult(invite) {
@@ -534,7 +554,7 @@ async function previewFile(id) {
   openModal(
     file.name,
     isImage ? '本地成果图片预览' : '文件预览 · 不执行脚本、不连接外部资源',
-    `${isImage ? '<div class="artifact-image-box"><img id="artifact-image-preview" alt=""></div><p id="artifact-image-error" class="form-error" hidden>图片无法解码，请下载原文件检查格式。</p>' : '<pre id="artifact-text-preview"></pre>'}${isHTML ? '<div class="detail-section"><h3>页面预览</h3><iframe id="artifact-html-preview" title="成果页面预览" sandbox="" referrerpolicy="no-referrer" style="width:100%;height:340px;border:1px solid #3c3545;border-radius:8px;background:white"></iframe></div>' : ''}<div class="modal-actions"><button type="button" class="button" data-action="download-file" data-id="${e(file.id)}">下载原文件</button><button type="button" class="button primary" data-action="close-modal">关闭</button></div>`,
+    `${isImage ? '<div class="artifact-image-box"><img id="artifact-image-preview" alt=""></div><p id="artifact-image-error" class="form-error" hidden>图片无法解码，请下载原文件检查格式。</p>' : '<pre id="artifact-text-preview"></pre>'}${isHTML ? '<div class="detail-section"><h3>页面预览</h3><iframe id="artifact-html-preview" class="artifact-frame" title="成果页面预览" sandbox="" referrerpolicy="no-referrer"></iframe></div>' : ''}<div class="modal-actions"><button type="button" class="button" data-action="download-file" data-id="${e(file.id)}">下载原文件</button><button type="button" class="button primary" data-action="close-modal">关闭</button></div>`,
   );
   if (isImage) {
     const objectURL = URL.createObjectURL(new Blob([body], { type: imageTypes[extension] }));
@@ -639,8 +659,10 @@ $('#message-form').addEventListener('submit', async (event) => {
       content,
       channel: sentChannel,
     });
-    if (currentProject === sentProject && channel === sentChannel && input.value.trim() === content)
+    if (currentProject === sentProject && channel === sentChannel && input.value.trim() === content) {
       input.value = '';
+      fitComposer();
+    }
     if ((unreadDrafts.get(`${sentProject}:${sentChannel}`) || '').trim() === content)
       unreadDrafts.delete(`${sentProject}:${sentChannel}`);
     await refresh(true);
@@ -660,6 +682,7 @@ $('#message-input').addEventListener('keydown', (event) => {
 });
 $('#message-input').addEventListener('input', () => {
   unreadDrafts.set(`${currentProject}:${channel}`, $('#message-input').value);
+  fitComposer();
 });
 $('#modal').addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -840,16 +863,7 @@ document.addEventListener('click', async (event) => {
         return;
       }
       await post('/api/logout');
-      state = {
-        projects: [],
-        tasks: [],
-        machines: [],
-        agents: [],
-        messages: [],
-        events: [],
-        artifacts: [],
-        storage: { used: 0, quota: 5e9 },
-      };
+      state = emptySnapshot();
       currentProject = null;
       messageSignature = '';
       unreadDrafts.clear();

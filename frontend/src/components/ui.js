@@ -37,6 +37,8 @@ const icons = {
   upload: 'M12 16V3m-4 4 4-4 4 4M4 17v4h16v-4',
   shield: 'm12 2 8 4v6c0 5-8 10-8 10S4 17 4 12V6l8-4Z',
   cube: 'm12 3 9 5v9l-9 5-9-5V8l9-5ZM3 8l9 5 9-5M12 13v9',
+  plus: 'M12 5v14M5 12h14',
+  alert: 'M12 9v4M12 17h.01M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z',
 };
 const icon = (name) =>
   `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${icons[name] || icons.spark}"/></svg>`;
@@ -71,6 +73,15 @@ const capabilityLabels = {
   debug: '调试',
   planning: '规划',
 };
+/** Pipeline lanes. Every task status falls into exactly one lane, cancelled work drops out. */
+const lanes = [
+  ['queued', '待分派', ['queued']],
+  ['running', '执行中', ['running', 'coordinating', 'publishing']],
+  ['in_review', '待验收', ['in_review']],
+  ['blocked', '需处理', ['failed', 'blocked', 'interrupted', 'changes_requested']],
+  ['done', '已完成', ['done', 'delivered']],
+];
+const laneOf = (value) => lanes.find((lane) => lane[2].includes(value))?.[0] || null;
 const status = (value) => `<span class="pill status-${e(value)}">${e(statusLabels[value] || value)}</span>`;
 const size = (bytes) =>
   bytes >= 1e9
@@ -98,7 +109,7 @@ const lines = (value) =>
     .map((line) => line.trim())
     .filter(Boolean);
 function emptyState(title, description, action = '', label = '') {
-  return `<div class="empty-state"><div class="empty-icon">${icon('spark')}</div><h3>${e(title)}</h3><p>${e(description)}</p>${action ? `<button class="button primary" data-action="${e(action)}">${e(label)}</button>` : ''}</div>`;
+  return `<div class="empty-state"><div class="empty-icon" aria-hidden="true"><i></i><i></i><i></i></div><h3>${e(title)}</h3><p>${e(description)}</p>${action ? `<button class="button primary" data-action="${e(action)}">${e(label)}</button>` : ''}</div>`;
 }
 
 export {
@@ -109,6 +120,8 @@ export {
   hydrateIcons,
   status,
   statusLabels,
+  lanes,
+  laneOf,
   roleLabels,
   capabilityLabels,
   size,

@@ -22,7 +22,7 @@ def main():
         return
     parser = argparse.ArgumentParser(description="PAL Arena — self-hosted development workspace")
     sub = parser.add_subparsers(dest="command", required=True)
-    serve = sub.add_parser("serve", help="Start the workspace on your Mac mini")
+    serve = sub.add_parser("serve", help="Start the workspace on an always-on computer")
     serve.add_argument("--data", default="~/.pal-arena/server")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8765)

@@ -95,6 +95,17 @@ export function demoState(channel = 'shared') {
       dependencies: ['t-doc001'],
       evidence: {},
       result: '',
+      permissions: [
+        {
+          id: 'demo-permission',
+          decided: false,
+          tool: { title: '运行 npm install 安装地图组件', name: 'shell' },
+          options: [
+            { optionId: 'allow', name: '允许一次' },
+            { optionId: 'reject', name: '拒绝' },
+          ],
+        },
+      ],
       created: now - 2400,
     },
     {

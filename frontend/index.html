@@ -4,15 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="theme-color" content="#ffffff" />
+    <meta name="theme-color" content="#eef0ec" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0e1216" media="(prefers-color-scheme: dark)" />
     <meta
       name="description"
-      content="Agent Cooperation，和伙伴一起组织电脑与 AI 成员，把想法变成可验收的作品。"
+      content="Agent Cooperation：你和伙伴、任意几台电脑、一组 AI 成员，在一张调度台上分工、交付和验收。"
     />
-    <title>Agent Cooperation · 协作工作台</title>
+    <title>Agent Cooperation</title>
     <link
       rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%23b6a4ff'/%3E%3Cpath d='M17 45 28 18h9L48 45H37l-5-16-5 16Z' fill='%2316171c'/%3E%3C/svg%3E"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231f3a5f'/%3E%3Crect x='14' y='16' width='8' height='32' rx='2' fill='%23d98e04'/%3E%3Crect x='28' y='16' width='8' height='32' rx='2' fill='%230b7a8c'/%3E%3Crect x='42' y='16' width='8' height='32' rx='2' fill='%23e8ecef'/%3E%3C/svg%3E"
     />
     <script>
       try {
@@ -24,85 +25,85 @@
   </head>
   <body>
     <section id="login-screen" class="login-screen" hidden>
+      <div class="login-art" aria-hidden="true">
+        <div class="login-lanes">
+          <span style="--d: 0s"></span><span style="--d: 1.2s"></span><span style="--d: 0.5s"></span
+          ><span style="--d: 1.8s"></span>
+        </div>
+      </div>
       <div class="login-panel">
         <a class="brand" href="/"
-          ><span class="brand-symbol">A</span><span>Agent <strong>Cooperation</strong></span></a
+          ><span class="brand-mark"><i></i><i></i><i></i></span>Agent Cooperation</a
         >
-        <p class="eyebrow">团队开发空间</p>
-        <h1>一起，把作品做出来。</h1>
-        <p class="login-copy">与你的伙伴共享一个工作台，让每台电脑、每个 AI 成员各展所长。</p>
+        <h1>多台电脑，一张调度台。</h1>
+        <p class="login-copy">
+          你和伙伴在这里提需求，负责人拆任务，各台电脑上的 AI 成员领取执行，再由另一位成员独立验收。
+        </p>
         <form id="login-form">
-          <label for="login-token">团队访问令牌</label
+          <label for="login-token">访问令牌</label
           ><input
             id="login-token"
             name="token"
             type="password"
             autocomplete="current-password"
-            placeholder="粘贴你的访问令牌"
+            placeholder="粘贴令牌"
             required
-          /><button class="button primary" type="submit">
-            进入工作台 <span aria-hidden="true">↗</span>
-          </button>
+          /><button class="button primary" type="submit">进入调度台</button>
           <p id="login-error" class="form-error" role="alert"></p>
         </form>
         <p class="login-help">
-          首次启动后，从服务端数据目录的 <code>owner-token.txt</code> 获取令牌。伙伴使用邀请生成的专属令牌。
+          首次启动后，令牌在服务端数据目录的 <code>owner-token.txt</code> 里。伙伴使用你邀请时生成的令牌。
         </p>
-        <a class="text-link" href="/?demo=1">先看看工作台效果 <span aria-hidden="true">→</span></a>
+        <a class="text-link" href="/?demo=1">不登录，先看示例</a>
       </div>
     </section>
 
     <div id="app" class="app" hidden>
       <aside class="sidebar" id="sidebar">
         <a class="brand" href="/"
-          ><span class="brand-symbol">A</span><span>Agent <strong>Cooperation</strong></span></a
+          ><span class="brand-mark"><i></i><i></i><i></i></span>Agent Cooperation</a
         >
-        <button class="workspace-switch" data-action="navigate" data-view="chat">
-          <span class="workspace-icon">A</span><span>协作空间<small>和负责人一起推进</small></span
-          ><span class="muted" aria-hidden="true">⌄</span>
-        </button>
         <nav class="main-nav" aria-label="主导航">
           <button data-action="navigate" data-view="chat" class="nav-item active">
-            <span data-icon="chat"></span>项目对话
+            <span data-icon="chat"></span>对话
           </button>
           <button data-action="navigate" data-view="tasks" class="nav-item">
-            <span data-icon="board"></span>任务进度<span id="task-nav-count" class="nav-count">0</span>
+            <span data-icon="board"></span>任务<span id="task-nav-count" class="nav-count">0</span>
+          </button>
+          <button data-action="navigate" data-view="review" class="nav-item">
+            <span data-icon="check"></span>验收<span id="review-nav-count" class="nav-count">0</span>
           </button>
           <button data-action="navigate" data-view="files" class="nav-item">
-            <span data-icon="folder"></span>成果与文件
-          </button>
-        </nav>
-        <div class="sidebar-section-heading">
-          <span>项目</span
-          ><button class="icon-button" data-action="new-project" aria-label="创建项目" title="创建项目">
-            +
-          </button>
-        </div>
-        <div id="project-list" class="project-list"></div>
-        <div class="sidebar-spacer"></div>
-        <details class="sidebar-more">
-          <summary>管理与设置</summary>
-          <button data-action="navigate" data-view="review" class="nav-item">
-            <span data-icon="check"></span>独立验收<span id="review-nav-count" class="nav-count">0</span>
+            <span data-icon="folder"></span>成果
           </button>
           <button data-action="navigate" data-view="machines" class="nav-item">
-            <span data-icon="monitor"></span>电脑与 AI 成员
+            <span data-icon="monitor"></span>电脑与成员<span id="machine-nav-count" class="nav-count quiet"
+              >0</span
+            >
           </button>
           <button data-action="navigate" data-view="memory" class="nav-item">
-            <span data-icon="spark"></span>记忆与偏好
+            <span data-icon="spark"></span>记忆
           </button>
           <button data-action="navigate" data-view="logs" class="nav-item">
             <span data-icon="terminal"></span>运行记录
           </button>
-          <button class="nav-item" data-action="team"><span data-icon="users"></span>伙伴与电脑</button>
-          <button class="nav-item" data-action="setup-help">
-            <span data-icon="list"></span>接入与自检指南
+        </nav>
+        <div class="sidebar-section-heading">
+          <span>项目</span
+          ><button class="icon-button small" data-action="new-project" aria-label="新建项目" title="新建项目">
+            <span data-icon="plus"></span>
           </button>
-          <div class="storage-card" id="sidebar-storage"></div>
-        </details>
+        </div>
+        <div id="project-list" class="project-list"></div>
+        <div class="sidebar-spacer"></div>
+        <div class="storage-card" id="sidebar-storage"></div>
+        <div class="sidebar-links">
+          <button class="nav-item" data-action="team"><span data-icon="users"></span>伙伴与令牌</button>
+          <button class="nav-item" data-action="setup-help"><span data-icon="list"></span>接入指南</button>
+        </div>
         <div class="user-row">
           <span class="user-avatar" id="user-avatar">Y</span>
-          <div><strong id="user-name">你的空间</strong><small>一起，把作品做出来</small></div>
+          <strong id="user-name">你</strong>
           <button class="icon-button" data-action="logout" aria-label="退出登录" title="退出登录">
             <span data-icon="logout"></span>
           </button>
@@ -111,12 +112,10 @@
 
       <main class="main" data-view="chat">
         <header class="topbar">
-          <div class="breadcrumb">
-            <button class="icon-button mobile-menu" data-action="menu" aria-label="展开导航">
-              <span data-icon="menu"></span></button
-            ><span data-icon="grid"></span><span>工作空间</span><span class="slash">/</span
-            ><strong id="breadcrumb-project">开始你的项目</strong>
-          </div>
+          <button class="icon-button mobile-menu" data-action="menu" aria-label="展开导航">
+            <span data-icon="menu"></span>
+          </button>
+          <strong class="topbar-project" id="breadcrumb-project">未选择项目</strong>
           <div class="topbar-right">
             <span class="connection-indicator" id="connection-status"><i></i>正在连接</span
             ><label class="theme-control"
@@ -126,84 +125,60 @@
                 <option value="light">浅色</option>
                 <option value="dark">深色</option>
               </select></label
-            ><button class="icon-button" data-action="refresh" aria-label="刷新状态" title="刷新状态">
+            ><button class="icon-button" data-action="refresh" aria-label="刷新" title="刷新">
               <span data-icon="refresh"></span>
             </button>
           </div>
         </header>
         <div id="demo-banner" class="demo-banner" hidden>
-          <span>效果预览 · 以下任务、成员和文件均为示例，未运行真实代理。</span
-          ><a href="/">进入实际工作台 →</a>
+          <span>示例数据：任务、电脑和文件都是演示用的，没有真实代理在运行。</span
+          ><a href="/">登录真实调度台</a>
         </div>
         <section class="project-header">
-          <div>
+          <div class="project-title">
             <div class="project-kicker">
-              <span>项目工作台</span><span id="project-status" class="pill">准备开始</span>
+              <span id="project-status" class="pill">准备开始</span
+              ><button class="revision" data-action="requirements" title="查看需求清单">
+                需求 <span id="requirement-revision">v1</span>
+              </button>
             </div>
-            <h1 id="project-name">你的下一件作品</h1>
-            <p id="project-description">从一个想法开始，让团队共同完成。</p>
+            <h1 id="project-name">还没有项目</h1>
+            <p id="project-description">新建一个项目，写下目标和完成条件。</p>
           </div>
           <div class="project-actions">
-            <button class="button subtle" data-action="project-settings" title="编辑项目与执行设置">
-              <span data-icon="settings"></span><span class="settings-label">项目设置</span></button
-            ><button class="button subtle" data-action="requirements">
-              <span data-icon="list"></span>需求清单
-              <span id="requirement-revision" class="revision">v1</span></button
+            <button class="icon-button" data-action="project-settings" title="项目设置" aria-label="项目设置">
+              <span data-icon="settings"></span></button
+            ><button class="button" data-action="requirements"><span data-icon="list"></span>需求清单</button
             ><button class="button primary" data-action="new-task">
-              <span aria-hidden="true">+</span> 新建任务
+              <span data-icon="plus"></span>新建任务
             </button>
           </div>
         </section>
-        <div id="stats" class="stats"></div>
+        <div id="stats" class="pipeline"></div>
+        <div id="attention" class="attention" hidden></div>
         <div class="content-grid">
           <section class="work-area">
-            <div class="work-tabs" role="tablist" aria-label="项目内容">
-              <button role="tab" aria-selected="true" data-action="navigate" data-view="chat" class="active">
-                <span data-icon="chat"></span>项目对话</button
-              ><button role="tab" aria-selected="false" data-action="navigate" data-view="tasks">
-                <span data-icon="board"></span>任务</button
-              ><button role="tab" aria-selected="false" data-action="navigate" data-view="review">
-                <span data-icon="check"></span>验收</button
-              ><button role="tab" aria-selected="false" data-action="navigate" data-view="files">
-                <span data-icon="folder"></span>成果</button
-              ><button role="tab" aria-selected="false" data-action="navigate" data-view="memory">
-                <span data-icon="spark"></span>记忆</button
-              ><button role="tab" aria-selected="false" data-action="navigate" data-view="logs">
-                <span data-icon="terminal"></span>日志
-              </button>
-            </div>
             <div id="view-chat" class="view-panel chat-panel">
               <div class="chat-heading">
-                <div class="lead-heading">
-                  <span class="lead-avatar" data-icon="spark"></span
-                  ><span><strong>项目负责人</strong><small>和负责人聊想法、看进展</small></span>
-                </div>
                 <div class="segmented">
-                  <button class="active" data-action="channel" data-channel="shared">团队共享</button
-                  ><button data-action="channel" data-channel="personal">个人对话</button>
+                  <button class="active" data-action="channel" data-channel="shared">团队频道</button
+                  ><button data-action="channel" data-channel="personal">私聊负责人</button>
                 </div>
+                <span class="muted small" id="channel-scope">你和伙伴都能看到</span>
               </div>
-              <p id="channel-note" class="channel-note" hidden>
-                个人内容仅你可见。当前保存在私人草稿中，发送到团队共享后才会分派任务。
-              </p>
+              <p id="channel-note" class="channel-note" hidden></p>
               <div id="message-list" class="message-list" aria-live="polite"></div>
               <form id="message-form" class="composer">
-                <label class="sr-only" for="message-input">向负责人描述需求</label
-                ><textarea
-                  id="message-input"
-                  rows="3"
-                  placeholder="描述你的想法，或告诉负责人下一步怎么做…"
-                ></textarea>
+                <label class="sr-only" for="message-input">给负责人发消息</label
+                ><textarea id="message-input" rows="2" placeholder="说说要做什么…"></textarea>
                 <div class="composer-bottom">
-                  <span
-                    ><span data-icon="spark"></span
-                    ><span id="composer-hint">负责人将结合需求清单安排成员</span></span
-                  ><button class="send-button" type="submit" aria-label="发送消息">
+                  <span id="composer-hint" class="muted small">负责人会按需求清单拆分任务</span
+                  ><span class="composer-keys muted small">Enter 发送 · Shift+Enter 换行</span
+                  ><button class="send-button" type="submit" aria-label="发送">
                     <span data-icon="arrow-up"></span>
                   </button>
                 </div>
               </form>
-              <p class="composer-footnote">Enter 发送 · Shift + Enter 换行</p>
             </div>
             <div id="view-tasks" class="view-panel" hidden></div>
             <div id="view-review" class="view-panel" hidden></div>
@@ -211,23 +186,27 @@
             <div id="view-machines" class="view-panel" hidden>
               <div class="view-heading">
                 <div>
-                  <h2>执行电脑与 AI 成员</h2>
-                  <p>电脑在线与客户端、订阅账号可用是不同状态。</p>
+                  <h2>电脑与成员</h2>
+                  <p>电脑在线、客户端可用、订阅可用是三件事，分开显示。</p>
                 </div>
-                <button class="button primary" data-action="invite-machine">连接电脑</button>
+                <button class="button primary" data-action="invite-machine">
+                  <span data-icon="plus"></span>连接电脑
+                </button>
               </div>
               <div class="machines-layout">
                 <section class="fleet-section">
-                  <div class="section-title"><h2>执行电脑</h2></div>
-                  <div class="fleet-summary" id="fleet-summary"></div>
+                  <div class="section-title">
+                    <h3>执行电脑</h3>
+                    <span class="fleet-summary" id="fleet-summary"></span>
+                  </div>
                   <div id="machine-list" class="machine-list"></div>
                 </section>
                 <section class="team-section">
                   <div class="section-title">
-                    <h2>已配置的 AI 成员</h2>
+                    <h3>AI 成员</h3>
                     <span class="muted small" id="agent-count">0 个</span>
                   </div>
-                  <div id="agent-list"></div>
+                  <div id="agent-list" class="agent-list"></div>
                 </section>
               </div>
             </div>
@@ -235,14 +214,12 @@
             <div id="view-logs" class="view-panel" hidden></div>
           </section>
           <aside class="context-panel">
+            <section id="project-fleet"></section>
             <section id="project-progress"></section>
-            <section id="project-deliverables"></section>
             <section id="project-brief"></section>
+            <section id="project-deliverables"></section>
           </aside>
         </div>
-        <footer class="workspace-footer">
-          <span>Agent Cooperation</span><span>数据保存在你的工作台</span>
-        </footer>
       </main>
     </div>
     <dialog id="modal" aria-labelledby="modal-title"><div id="modal-content"></div></dialog>
