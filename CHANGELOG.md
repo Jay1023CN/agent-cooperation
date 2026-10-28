@@ -2,6 +2,24 @@
 
 <!-- version list -->
 
+## v1.8.0 (2026-10-28)
+
+### Chores
+
+- Sync version to config.py [skip ci]
+  ([`b04ccc9`](https://github.com/Jay1023CN/agent-cooperation/commit/b04ccc989ef3fd96d16228fd8e6eac944a81bc6e))
+
+### Documentation
+
+- 提供 Mac mini 固定版本安装与登录自启助手
+  ([`9256090`](https://github.com/Jay1023CN/agent-cooperation/commit/9256090477a5cacb12cf18a0d2b9cbf783f2607a))
+
+### Features
+
+- 任务详情汇总执行与验收时间线并支持分页查看
+  ([`cadb875`](https://github.com/Jay1023CN/agent-cooperation/commit/cadb875be232c7d706254a036a7e8da672ea5cb0))
+
+
 ## v1.7.1 (2026-10-28)
 
 ### Bug Fixes
