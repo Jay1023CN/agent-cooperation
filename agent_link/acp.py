@@ -577,6 +577,8 @@ class ACP:
                     thread.join(timeout=2)
             for stream in (self.process.stdin, self.process.stdout, self.process.stderr):
                 if stream:
-                    stream.close()
+                    # Closing stdin may flush a cancellation after the peer has exited.
+                    with contextlib.suppress(BrokenPipeError):
+                        stream.close()
         if self.cleanup_error:
             raise BridgeError(self.cleanup_error)

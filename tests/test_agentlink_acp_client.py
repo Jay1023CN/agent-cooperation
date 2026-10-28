@@ -6,6 +6,8 @@ import sys
 import threading
 import time
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import psutil
 import pytest
@@ -134,6 +136,28 @@ def test_close_cancels_pending_client_approval(tmp_path):
     assert time.monotonic() - started < 5
     assert adapter.process.poll() is not None
     assert not (tmp_path / "terminal.txt").exists()
+
+
+@pytest.mark.parametrize("cleanup_error", [None, "Process cleanup failed"])
+def test_close_continues_after_peer_breaks_stdin_without_masking_cleanup_failure(monkeypatch, cleanup_error):
+    import io
+
+    adapter = ACP("qoder")
+    stdin = Mock()
+    stdin.close.side_effect = BrokenPipeError("Peer exited before the buffered cancellation was flushed")
+    stdout, stderr = io.StringIO(), io.StringIO()
+    adapter.process = SimpleNamespace(stdin=stdin, stdout=stdout, stderr=stderr)
+    adapter.cleanup_error = cleanup_error
+    stopped = Mock()
+    monkeypatch.setattr("agent_link.acp.stop_tree", stopped)
+    if cleanup_error:
+        with pytest.raises(BridgeError, match=cleanup_error):
+            adapter.close()
+    else:
+        adapter.close()
+    stdin.close.assert_called_once()
+    stopped.assert_called_once_with(adapter.process)
+    assert stdout.closed and stderr.closed
 
 
 def test_final_prompt_response_is_kept_when_agent_exits_immediately(tmp_path):
