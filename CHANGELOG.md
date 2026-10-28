@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.5.0 (2026-10-28)
+
+### Chores
+
+- Sync version to config.py [skip ci]
+  ([`c50e3f5`](https://github.com/Jay1023CN/agent-cooperation/commit/c50e3f549a1a0faadcae8ab1a1ba198d62ecdbe0))
+
+### Features
+
+- **arena**: 一条命令通过 Tailscale 共享中心，网页给出其他电脑的地址
+  ([`6d0e38e`](https://github.com/Jay1023CN/agent-cooperation/commit/6d0e38e0e00c1b9133ffb5f59cc32233787cb521))
+
+
 ## v1.4.1 (2026-10-28)
 
 ### Bug Fixes
