@@ -103,6 +103,8 @@
 
 </details>
 
+</details>
+
 ## 快速开始
 
 需要 Python 3.10+，并在每台电脑上先登录你打算用的客户端（Claude Code、Codex、Qoder 等）。
