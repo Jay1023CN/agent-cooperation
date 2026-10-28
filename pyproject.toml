@@ -1,6 +1,6 @@
 [project]
 name = "pal-mcp-server"
-version = "9.10.0"
+version = "1.0.0"
 description = "PAL Agent Link: MCP bridge for desktop coding sessions, ACP agents, and PAL workflows"
 requires-python = ">=3.10"
 dependencies = [
