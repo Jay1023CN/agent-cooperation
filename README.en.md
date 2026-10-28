@@ -22,6 +22,14 @@ You have Claude Code, Codex, Qoder, Antigravity, WorkBuddy… spread across a fe
 
 > **Status: early.** The console, scheduling, Git handoff and review loop are built and tested with temporary Git repos, fake CLIs and protocol fixtures. A full end-to-end run across several real machines with real subscriptions is still in progress. See [What works today](#what-works-today).
 
+<table>
+  <tr>
+    <td width="33%" valign="top"><b>🧭 One dispatch console</b><br><sub>State a goal in the team channel; a lead splits it into tasks with acceptance criteria and records why each one is assigned.</sub></td>
+    <td width="33%" valign="top"><b>🔍 A different member reviews</b><br><sub>The worker can't review itself; no structured verdict and evidence means not passed, and it goes back for revision.</sub></td>
+    <td width="33%" valign="top"><b>🔐 Self-hosted, no API key</b><br><sub>Uses the client subscriptions you're already logged into; Tailscale networking, no public IP.</sub></td>
+  </tr>
+</table>
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/arena-preview-dark.png">
   <img alt="Dispatch console: task pipeline, approval prompt, team channel and per-computer lanes" src="docs/images/arena-preview-light.png">
