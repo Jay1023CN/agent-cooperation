@@ -1966,6 +1966,23 @@ kbd {
   background: transparent;
 }
 
+.member-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px var(--space-2);
+  min-width: 0;
+}
+.member-check {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+.member-check.tone-problem {
+  color: var(--danger);
+}
+
 .member-tally {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2155,7 +2172,8 @@ kbd {
   .agent-row {
     grid-template-columns: 32px minmax(0, 1fr);
   }
-  .agent-row .member-state {
+  .agent-row .member-badges {
+    justify-content: flex-start;
     grid-column: 2;
   }
   .agent-info small {

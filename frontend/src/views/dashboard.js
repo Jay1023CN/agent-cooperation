@@ -155,23 +155,29 @@ export function renderAttention(state) {
  * readiness report from a computer that has since gone offline must not read as "ready".
  * tone: ready | busy | wait | off | problem
  */
-function memberState(agent, machine) {
+function detection(agent) {
   const r = agent.readiness || {};
-  const probed = typeof r.installed === 'boolean';
-  if (!machine?.online) return { key: 'offline', label: '电脑离线', tone: 'off' };
-  if (!agent.enabled) return { key: 'disabled', label: '未启用', tone: 'off' };
-  if (!probed) return { key: 'unprobed', label: '待探测', tone: 'wait' };
+  if (typeof r.installed !== 'boolean') return { key: 'unprobed', label: '待探测', tone: 'wait' };
   if (r.installed === false) return { key: 'missing', label: '未找到客户端', tone: 'problem' };
   if (r.transport_ready === false) return { key: 'transport', label: '连接不可用', tone: 'problem' };
-  if (agent.busy) return { key: 'busy', label: `执行中 ${agent.busy}`, tone: 'busy' };
-  if (r.dispatchable === true) return { key: 'ready', label: '就绪', tone: 'ready' };
+  if (r.dispatchable === true) return null;
   return { key: 'blocked', label: '暂不可执行', tone: 'problem' };
+}
+
+function memberState(agent, machine) {
+  if (!machine?.online) return { key: 'offline', label: '电脑离线', tone: 'off' };
+  const check = detection(agent);
+  // Running on an online computer is a current fact on its own. It says nothing about the
+  // client check, so an unfinished check is shown next to it rather than inferred from it.
+  if (agent.busy) return { key: 'busy', label: `执行中 ${agent.busy}`, tone: 'busy', check };
+  if (!agent.enabled) return { key: 'disabled', label: '未启用', tone: 'off' };
+  return check || { key: 'ready', label: '就绪', tone: 'ready' };
 }
 
 const machineOf = (agent, state) => state.machines.find((machine) => machine.id === agent.machine_id);
 const providerLabel = (provider) => providerInfo[provider]?.label || provider || '未知客户端';
 const stateBadge = (status) =>
-  `<span class="member-state tone-${status.tone}"><span aria-hidden="true"></span>${e(status.label)}</span>`;
+  `<span class="member-badges"><span class="member-state tone-${status.tone}"><span aria-hidden="true"></span>${e(status.label)}</span>${status.check ? `<span class="member-check tone-${status.check.tone}">检测：${e(status.check.label)}</span>` : ''}</span>`;
 
 function seenAgo(seconds) {
   if (!seconds) return '';
@@ -194,13 +200,16 @@ function machineNext(machine, members) {
       text: '已连上中心，但 worker.json 里没有成员。',
       action: '<button class="text-link" data-action="invite-machine">重新生成配置</button>',
     };
-  const problem = members.find(({ status }) => status.tone === 'problem' || status.key === 'unprobed');
+  // A running member can still have an unfinished check; look at the check, not the work.
+  const problem = members
+    .map(({ agent, status }) => ({ agent, check: status.check || status }))
+    .find(({ check }) => check.tone === 'problem' || check.key === 'unprobed');
   if (problem)
     return {
       text:
-        problem.status.key === 'unprobed'
+        problem.check.key === 'unprobed'
           ? '成员还没报告检测结果，worker 启动后会自动检测。'
-          : `${problem.agent.name}：${problem.status.label}。`,
+          : `${problem.agent.name}：${problem.check.label}。`,
       action: `<button class="text-link" data-action="agent" data-id="${e(problem.agent.id)}">看原因</button>`,
     };
   if (members.every(({ status }) => status.key === 'disabled'))
@@ -333,7 +342,13 @@ export function openAgent(id, state, openModal) {
       '本地连接',
       stale ? ['unknown', '电脑离线，无法确认'] : fact(r.transport_ready, '连接正常', '连接不可用', '还没检查'),
     ],
-    ['成员', [status.tone === 'ready' || status.tone === 'busy' ? 'ok' : status.tone === 'problem' ? 'bad' : 'unknown', status.label]],
+    [
+      '成员',
+      [
+        status.tone === 'ready' || status.tone === 'busy' ? 'ok' : status.tone === 'problem' ? 'bad' : 'unknown',
+        status.check ? `${status.label}，检测尚未通过（${status.check.label}）` : status.label,
+      ],
+    ],
   ];
   const profile = agent.routing_profile || {};
   openModal(
