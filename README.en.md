@@ -49,7 +49,7 @@ Run your own hub and connect computers through Tailscale, without a public IP. W
 
 ## Recent updates
 
-- **Workspace UI:** refreshed channels, memory and storage pages, implemented by an existing Claude Desktop session and integrated and checked by Codex.
+- **Workspace UI:** refreshed channels, memory and storage pages with a clean system style for light, dark and mobile layouts. An existing Claude Desktop session implemented the design; Codex integrated and checked it.
 
 - **Memory, summaries and storage:** inspect memory sources and correct channel summaries; view hub and worker space, preview reclaimable workspaces, and confirm cleanup after the idle worker rechecks them.
 

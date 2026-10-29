@@ -46,11 +46,11 @@ node scripts/export-demo.mjs /path/to/pal-arena-preview.html
 
 默认主题跟随操作系统，并实时响应系统浅色 / 深色切换。用户可在右上角覆盖为浅色或深色，选择保存在本机 `localStorage` 的 `pal-arena-theme`。主题色只在 `src/styles.css` 的 `:root` 定义，通过 `light-dark()` 使用同一套语义令牌。使用支持 `light-dark()` 的现代浏览器（Chrome / Edge 123+、Safari 17.5+、Firefox 120+）。
 
-- **方向**：调度台。界面只有两种颜色语言：墨蓝 `--accent` 用于操作、焦点和当前位置；五个任务状态色（`--s-queued/running/review/done/blocked`）承担所有其他色彩。不要为装饰新增颜色。
-- **字体**：`--font-sans` 以打包进构建的 Archivo 可变字体（`@fontsource-variable/archivo`，仅拉丁字母与数字，约 90 KB，不走 CDN）开头，中文依次回落到鸿蒙黑体、MiSans、苹方、微软雅黑。大号数字使用 `font-stretch: 72%` 的窄体；任务编号用 80% 窄体加字距。等宽字体只用于命令、JSON 和提交号。
-- **字号**：6 档：`--text-xs` 12、`--text-sm` 13、`--text-base` 15（正文）、`--text-md` 18（模块 / 弹窗标题）、`--text-lg` 24、`--text-xl` 34（项目标题）。不要在视图里增加字号。
-- **间距**：以 4px 为基础，`--space-1/2/3/4/5/6/8/12` 对应 4/8/12/16/20/24/32/48px。
-- **控件**：共用 `.button`、`.icon-button`、`.field`、`.pill`、`.notice`、`.segmented`。圆角三档：控件 6px、卡片 10px、对话框与聊天面板 14px。状态用左侧 3px 色条（`box-shadow: inset 3px 0 0 var(--state)`）表达，`status-*` 类会设置 `--state`。
+- **方向**：清爽明亮的系统风格。蓝色用于操作与焦点；任务状态通过小圆点和浅色背景区分。
+- **字体**：优先使用设备的系统字体，中文回落到苹方、鸿蒙黑体、MiSans 或微软雅黑；命令和提交号使用等宽字体，不额外下载字体。
+- **字号**：`--text-xs` 12、`--text-sm` 14、`--text-base` 15、`--text-md` 19、`--text-lg` 26、`--text-xl` 34。
+- **间距**：`--space-1/2/3/4/5/6/8/12` 对应 4/8/12/16/20/28/36/56px。
+- **控件**：共用 `.button`、`.icon-button`、`.field`、`.pill`、`.notice`、`.segmented`。使用柔和阴影和圆角区分层次，状态颜色用于提示而非装饰。
 - **信息结构**：侧栏平铺全部页面，顶部是命令面板入口；桌面端没有顶栏，项目头部一行，下面是任务管线条和「需处理」条（授权可就地允许 / 拒绝）。对话页是固定高度的工作台：对话占满剩余高度，右栏「机位」每台电脑一条轨道，显示每个执行位上的任务，下面是排队任务及其等待原因。地址用 `#/<项目>/<页面>` 或 `#/<项目>/task/<任务>`，最近项目记在本机。
 - **快捷操作**：`Ctrl/⌘ K` 命令面板（`src/components/palette.js`），`N` 新建任务，`/` 聚焦输入框，`G` + `C/T/R/F/M/Y/L` 切换页面；弹窗里的 `pre` 自动带复制按钮；页面在后台时每 20 秒同步一次，开启提醒后用系统通知提示授权和失败。`public/` 里的 `manifest.webmanifest` 和图标让工作台可以安装为应用。
 - **无障碍**：原生按钮 / 表单 / `dialog`、清楚的焦点样式、图标按钮名称；菜单支持 Escape，收起的手机导航使用 `inert`。`/` 聚焦对话输入框。尊重减少动态效果设置。
