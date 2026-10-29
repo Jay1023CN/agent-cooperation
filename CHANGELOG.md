@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.10.1 (2026-10-29)
+
+### Bug Fixes
+
+- **ui**: 重做电脑接入向导并修正原生包启动命令
+  ([`fd84b59`](https://github.com/Jay1023CN/agent-cooperation/commit/fd84b595db13aacd8fc874132f0792dbfc8cea3f))
+
+### Chores
+
+- Sync version to config.py [skip ci]
+  ([`e5d2ec8`](https://github.com/Jay1023CN/agent-cooperation/commit/e5d2ec890beb565d7235355c27d5985023ce68fe))
+
+
 ## v1.10.0 (2026-10-29)
 
 ### Chores
