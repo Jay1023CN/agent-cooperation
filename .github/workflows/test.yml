@@ -1,8 +1,7 @@
-name: Tests
+name: Full Test Suite (manual)
 
 on:
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
 
 jobs:
   test:
@@ -26,11 +25,9 @@ jobs:
           pip install -r requirements-dev.txt
           pip install -e ".[platform]"
 
-      - name: Run unit tests
+      - name: Run complete non-integration suite
         run: |
-          # Run only unit tests (exclude simulation tests and integration tests)
-          # Integration tests require local-llama which isn't available in CI
-          python -m pytest tests/ -v --ignore=simulator_tests/ -m "not integration"
+          python -m pytest tests/ -q --ignore=simulator_tests/ -m "not integration"
         env:
           # Ensure no API key is accidentally used in CI
           GEMINI_API_KEY: ""

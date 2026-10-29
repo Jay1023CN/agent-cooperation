@@ -2,6 +2,14 @@
 
 让 MCP 客户端把任务交给本机编码代理或桌面会话，并读回进度、结果和错误。Python 3.10+，不包含固定用户名、盘符、端口或本机凭证。
 
+## 与 PAL Arena、Multica 的关系
+
+当前完整的多电脑工作流由仓库内的 PAL Arena 提供：任务、成员、调度、执行状态和验收都由 Arena 管理，见[交付指南](arena-delivery.md)。运行 Arena 不需要安装或连接 Multica。
+
+Agent Link 是可独立使用的本机 MCP 桥。它能检查连接、创建/使用客户端会话、提交任务并读取状态；这些操作本身不会创建 Arena 或 Multica 任务。`plan_agent_assignment` 只按调用方给出的快照排序，不会预留资源或派发。桌面会话交接见[本机桌面交接](desktop-handoff.md)：它只在本机交接候选结果，也不会自动回写 Multica。
+
+Multica 相关页面记录可选的上游集成方案，不是当前 Arena 的安装或运行步骤；使用 Multica 时应按对应页面标出的限制单独配置和验收。
+
 ## 连接方式
 
 | 代理 | 接口 | 连接对象 |

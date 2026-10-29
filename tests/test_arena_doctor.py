@@ -103,6 +103,28 @@ def test_read_only_transport_diagnostic_sanitizes_adapter_errors(diagnostic_envi
     assert "adapter" not in report["agents"][0]
 
 
+def test_read_only_transport_diagnostic_keeps_actionable_error_without_credentials(diagnostic_environment, monkeypatch):
+    path, config = diagnostic_environment
+    config["agents"][0].update(provider="antigravity", model="example-model", adapter={"token": "LOCAL_SECRET"})
+    path.write_text(json.dumps(config), encoding="utf-8")
+
+    class Adapter:
+        def connect(self):
+            raise WorkerError("connection refused; token=LOCAL_SECRET")
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "arena.worker.antigravity_services", lambda: [{"url": "https://localhost:1234", "token": "LOCAL_SECRET"}]
+    )
+    monkeypatch.setattr("arena.worker.Agents.get", lambda *_: Adapter())
+    report = doctor.diagnose(path)
+    reason = report["agents"][0]["reason"]
+    assert "connection refused" in reason
+    assert "LOCAL_SECRET" not in reason
+
+
 @pytest.mark.parametrize(
     "body,status",
     [

@@ -309,17 +309,55 @@ def inspect_agent(agent, *, probe_transport=True):
                 dispatchable=False,
                 reason="Select an Antigravity model ID before dispatch; desktop connection alone is insufficient",
             )
-    except (WorkerError, BridgeError, OSError, ValueError):
+    except (WorkerError, BridgeError, OSError, ValueError) as exc:
         report.update(
             transport_ready=False,
             dispatchable=False,
-            reason=f"{provider} prerequisites or read-only transport check failed; check installation and local adapter settings",
+            reason=f"{provider} connection check failed: {_safe_agent_error(exc, settings)}",
         )
     finally:
         if adapter:
             with contextlib.suppress(WorkerError, BridgeError, OSError):
                 adapter.close()
     return report
+
+
+def _safe_agent_error(error, settings):
+    """Keep actionable adapter diagnostics while removing configured credentials."""
+    detail = str(error).strip()
+    secrets = []
+
+    def collect(value, key=""):
+        if isinstance(value, dict):
+            for child_key, child in value.items():
+                child_key = str(child_key)
+                if child_key.lower().endswith("_env") and isinstance(child, str):
+                    secret = os.environ.get(child)
+                    if secret:
+                        secrets.append(secret)
+                collect(child, child_key)
+        elif isinstance(value, (list, tuple)):
+            for child in value:
+                collect(child, key)
+        elif isinstance(value, str) and any(
+            part in key.lower() for part in ("token", "secret", "password", "credential", "api_key")
+        ):
+            secrets.append(value)
+
+    collect(settings)
+    for secret in sorted(set(secrets), key=len, reverse=True):
+        if len(secret) >= 4:
+            detail = detail.replace(secret, "[credential]")
+    detail = re.sub(r"(?i)\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+", r"\1 [credential]", detail)
+    detail = re.sub(
+        r"(?i)(token|secret|password|api[_-]?key|authorization)(\s*[=:]\s*)[^\s,;]+",
+        r"\1\2[credential]",
+        detail,
+    )
+    detail = re.sub(r"(?i)(?:upstream\s+)?credentials?\s*[:=].*", "credentials: [credential]", detail)
+    detail = re.sub(r"https?://[^/@\s:]+:[^/@\s]+@", "https://[credential]@", detail)
+    detail = re.sub(r"\s+", " ", detail)
+    return detail[:500] or "Check installation and local adapter settings."
 
 
 def load_config(path: str) -> dict:
@@ -1364,7 +1402,15 @@ def run_pal(agent, workspace, prompt, env, api, cancel, on_output, timeout):
                 or state.get("outcome") in ("failed", "cancelled")
             ):
                 terminal_known = True
-                raise WorkerError("PAL agent did not complete successfully; inspect the session and task log")
+                errors = [state.get("error")]
+                errors.extend(
+                    message.get("error")
+                    for message in state.get("messages", [])
+                    if isinstance(message, dict) and message.get("error")
+                )
+                detail = "; ".join(str(error) for error in errors if error)
+                safe_detail = _safe_agent_error(detail or status or state.get("outcome"), settings)
+                raise WorkerError(f"PAL agent did not complete successfully: {safe_detail}")
             if status == "completed" or state.get("outcome") == "succeeded":
                 terminal_known = True
                 return output, {"session_id": session_id}
@@ -1390,7 +1436,7 @@ def run_pal(agent, workspace, prompt, env, api, cancel, on_output, timeout):
         raise
     except BridgeError as exc:
         raise WorkerError(
-            "PAL transport failed; inspect its local session before retrying",
+            f"PAL transport failed: {_safe_agent_error(exc, settings)}; inspect its local session before retrying",
             evidence={"session_id": session_id, "provider": provider, "execution_uncertain": submitted},
         ) from exc
     finally:

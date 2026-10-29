@@ -510,6 +510,56 @@ def test_workbuddy_response_is_not_claimed_as_completed(tmp_path):
     assert error.value.evidence["execution_uncertain"] is True
 
 
+def test_pal_task_failure_preserves_actionable_error_and_redacts_adapter_credential(tmp_path):
+    from unittest.mock import MagicMock
+
+    adapter = MagicMock()
+    adapter.create.return_value = {"id": "session"}
+    adapter.read.return_value = {
+        "status": "failed",
+        "error": "connection refused; token=LOCAL_SECRET",
+        "messages": [],
+    }
+    with patch("arena.worker.Agents.get", return_value=adapter):
+        with pytest.raises(WorkerError, match="connection refused") as error:
+            run_pal(
+                {"provider": "opencode", "adapter": {"token": "LOCAL_SECRET"}},
+                tmp_path,
+                "task",
+                {},
+                None,
+                threading.Event(),
+                lambda _: None,
+                5,
+            )
+    assert "LOCAL_SECRET" not in str(error.value)
+    assert error.value.evidence.get("execution_uncertain", False) is False
+
+
+def test_pal_transport_failure_preserves_actionable_error_and_unknown_outcome(tmp_path):
+    from unittest.mock import MagicMock
+
+    from agent_link.common import BridgeError
+
+    adapter = MagicMock()
+    adapter.create.return_value = {"id": "session"}
+    adapter.send.side_effect = BridgeError("connection refused; token=LOCAL_SECRET")
+    with patch("arena.worker.Agents.get", return_value=adapter):
+        with pytest.raises(WorkerError, match="connection refused") as error:
+            run_pal(
+                {"provider": "opencode", "adapter": {"token": "LOCAL_SECRET"}},
+                tmp_path,
+                "task",
+                {},
+                None,
+                threading.Event(),
+                lambda _: None,
+                5,
+            )
+    assert "LOCAL_SECRET" not in str(error.value)
+    assert error.value.evidence["execution_uncertain"] is True
+
+
 def test_mutation_response_loss_is_uncertain_and_not_retried():
     from unittest.mock import Mock
 
