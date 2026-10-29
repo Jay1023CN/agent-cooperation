@@ -2,6 +2,35 @@
 
 <!-- version list -->
 
+## v1.11.0 (2026-10-29)
+
+### Bug Fixes
+
+- **handoff**: 修复 Windows 中文交接并完成真实桌面协作验收
+  ([`dd0c0e4`](https://github.com/Jay1023CN/agent-cooperation/commit/dd0c0e467e18f837bc860dd8628726b2d737b3c5))
+
+- **ui**: 在线执行中的成员单独显示执行状态，检测状态并列显示
+  ([`1f43099`](https://github.com/Jay1023CN/agent-cooperation/commit/1f43099c921d6171e304ba23631963ed7b116f5f))
+
+- **ui**: 离线电脑卡片按钮改为“查看接入步骤”
+  ([`ee9284d`](https://github.com/Jay1023CN/agent-cooperation/commit/ee9284d455fbb237319bc2665fc6feedf1ba784a))
+
+### Chores
+
+- Sync version to config.py [skip ci]
+  ([`644fa72`](https://github.com/Jay1023CN/agent-cooperation/commit/644fa72fa4caefc626568b63a630308d025e54f3))
+
+### Documentation
+
+- 更新 v1.10.1 下载入口与验证记录 [skip ci]
+  ([`0efbfc8`](https://github.com/Jay1023CN/agent-cooperation/commit/0efbfc833375e99ce98bbff2bd5b298b85258dd2))
+
+### Features
+
+- **ui**: 重整电脑与成员页，分清在线、检测到与就绪
+  ([`0dc34af`](https://github.com/Jay1023CN/agent-cooperation/commit/0dc34af08a658bdc0db580313455b74b6307cd24))
+
+
 ## v1.10.1 (2026-10-29)
 
 ### Bug Fixes
