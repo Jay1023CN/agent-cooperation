@@ -1,8 +1,24 @@
 import { $, e, dateLabel, emptyState } from '../components/ui.js';
 
-export function renderMemories(memories, memoryScope) {
+export function renderMemories(memories, memoryScope, summary = null) {
   const categories = { preference: '偏好', decision: '已定决策', context: '背景', constraint: '约束' };
   const statuses = { active: '已启用', proposed: '待确认', disabled: '已停用', merged: '已合并' };
+  const summaryCard = `<section class="memory-card"><div class="memory-card-top"><strong>对话摘要</strong>${summary?.updated ? `<span class="muted small">${dateLabel(summary.updated)}</span>` : ''}</div><p>${summary?.summary ? e(summary.summary) : '对话较长时，负责人会自动整理当前进展。'}</p>${summary?.revision ? '<div class="memory-card-footer"><span></span><button class="text-link" data-action="edit-conversation-summary">更正摘要</button></div>' : ''}</section>`;
+  const entries = !memories.length
+    ? emptyState(
+        '还没有记忆',
+        memoryScope === 'project'
+          ? '项目约定和偏好会在对话中逐步整理到这里。'
+          : '你的长期偏好和背景会在对话中逐步整理到这里。',
+        'new-memory',
+        '添加一条记忆',
+      )
+    : `<div class="memory-list">${memories
+        .map(
+          (item) =>
+            `<article class="memory-card ${item.status === 'disabled' ? 'disabled' : ''}"><div class="memory-card-top"><span class="pill">${e(categories[item.category] || item.category)}</span><span class="pill status-${item.status === 'active' ? 'done' : item.status === 'proposed' ? 'in_review' : 'cancelled'}">${statuses[item.status] || e(item.status)}</span><span class="muted small">v${item.revision}</span></div><p>${e(item.content)}</p><div class="memory-card-footer"><span>${dateLabel(item.updated || item.created)}${item.source_task ? ' · AI 整理' : ''}</span><div>${item.source_task ? `<button class="text-link" data-action="memory-source" data-id="${e(item.id)}">查看来源</button>` : ''}<button class="text-link" data-action="edit-memory" data-id="${e(item.id)}">编辑</button><button class="text-link" data-action="memory-status" data-id="${e(item.id)}" data-status="${item.status === 'active' ? 'disabled' : 'active'}">${item.status === 'active' ? '停用' : item.status === 'proposed' ? '确认启用' : '重新启用'}</button><button class="text-link" data-action="delete-memory" data-id="${e(item.id)}">删除</button></div></div></article>`,
+        )
+        .join('')}</div>`;
   $('#view-memory').innerHTML =
-    `<div class="view-heading"><div><h2>记忆</h2><p>负责人会从对话中整理长期有用的信息，你可以随时修改或删除。</p></div><button class="button small" data-action="new-memory">添加记忆</button></div><div class="memory-toolbar"><div class="segmented"><button data-action="memory-scope" data-scope="project" class="${memoryScope === 'project' ? 'active' : ''}">项目共享</button><button data-action="memory-scope" data-scope="member" class="${memoryScope === 'member' ? 'active' : ''}">只给我</button></div><span class="muted small">${memoryScope === 'project' ? '团队成员共享' : '仅你可见'}</span></div>${!memories.length ? emptyState('还没有记忆', memoryScope === 'project' ? '项目约定和偏好会在对话中逐步整理到这里。' : '你的长期偏好和背景会在对话中逐步整理到这里。', 'new-memory', '添加一条记忆') : `<div class="memory-list">${memories.map((item) => `<article class="memory-card ${item.status === 'disabled' ? 'disabled' : ''}"><div class="memory-card-top"><span class="pill">${e(categories[item.category] || item.category)}</span><span class="pill status-${item.status === 'active' ? 'done' : item.status === 'proposed' ? 'in_review' : 'cancelled'}">${statuses[item.status] || e(item.status)}</span><span class="muted small">v${item.revision}</span></div><p>${e(item.content)}</p><div class="memory-card-footer"><span>${dateLabel(item.updated || item.created)}${item.source_task ? ' · AI 整理' : ''}</span><div><button class="text-link" data-action="edit-memory" data-id="${e(item.id)}">编辑</button><button class="text-link" data-action="memory-status" data-id="${e(item.id)}" data-status="${item.status === 'active' ? 'disabled' : 'active'}">${item.status === 'active' ? '停用' : item.status === 'proposed' ? '确认启用' : '重新启用'}</button><button class="text-link" data-action="delete-memory" data-id="${e(item.id)}">删除</button></div></div></article>`).join('')}</div>`}`;
+    `<div class="view-heading"><div><h2>记忆</h2><p>负责人会从对话中整理长期有用的信息，你可以随时修改或删除。</p></div><button class="button small" data-action="new-memory">添加记忆</button></div><div class="memory-toolbar"><div class="segmented"><button data-action="memory-scope" data-scope="project" class="${memoryScope === 'project' ? 'active' : ''}">项目共享</button><button data-action="memory-scope" data-scope="member" class="${memoryScope === 'member' ? 'active' : ''}">只给我</button></div><span class="muted small">${memoryScope === 'project' ? '团队成员共享' : '仅你可见'}</span></div>${summaryCard}${entries}`;
 }

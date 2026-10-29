@@ -42,6 +42,8 @@ jobs:
         run: |
           python -m pytest tests/test_agentlink_contracts.py tests/test_agentlink_tool.py tests/test_arena_doctor.py -q
           python -m pytest tests/test_arena_worker.py -q -k "pal_task_failure_preserves_actionable_error or pal_transport_failure_preserves_actionable_error"
+          python -m pytest tests/test_arena_api.py::test_cleanup_preview_is_creator_only_and_filters_private_tasks tests/test_arena_worker.py::test_worker_apply_rechecks_and_limits_deletion_to_confirmed_commits -q
+          python -m pytest tests/test_arena_api.py::test_leader_automatically_remembers_and_updates_from_member_conversation tests/test_arena_api.py::test_conversation_summary_is_incremental_and_channel_scoped tests/test_arena_api.py::test_center_quota_blocks_new_work_and_keeps_existing_data tests/test_arena_worker.py::test_long_conversation_is_compacted_before_leader_response -q
 
       - name: Run semantic release
         env:

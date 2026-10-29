@@ -80,12 +80,38 @@ export function renderReviews(state) {
 
 export function renderFiles(state) {
   const files = state.artifacts;
+  const storage = state.storage || {};
+  const storageLabels = { ok: '正常', near_limit: '空间紧张', blocked: '已触及上限', unknown: '状态未知' };
+  const centerReason =
+    storage.state === 'blocked' && storage.disk_free_bytes < 1024 ** 3
+      ? '中心电脑剩余空间不足'
+      : storage.state === 'blocked'
+        ? '中心存储预算已满'
+        : storageLabels[storage.state] || '状态未知';
+  const machines = (state.machines || [])
+    .map((machine) => {
+      const machineState = machine.storage_state || 'unknown';
+      const detail =
+        machineState === 'unknown'
+          ? machine.online
+            ? '容量数据尚不可用'
+            : '电脑离线，容量状态未知'
+          : `工作区 ${size(machine.storage_bytes)} / ${size(machine.storage_limit_bytes)} · 磁盘剩余 ${size(machine.disk_free_bytes)}`;
+      const label =
+        machineState === 'blocked'
+          ? machine.disk_free_bytes < 1024 ** 3
+            ? '磁盘空间不足'
+            : '工作区预算已满'
+          : storageLabels[machineState] || '状态未知';
+      return `<div class="file-row"><span>${icon('monitor')}</span><div class="file-row-main"><strong>${e(machine.name)}</strong><small>${e(detail)}</small></div><div class="file-row-actions"><span class="pill">${e(label)}</span>${machine.online ? `<button class="text-link" data-action="preview-workspaces" data-id="${e(machine.id)}">查看可清理空间</button>` : ''}</div></div>`;
+    })
+    .join('');
   $('#view-files').innerHTML =
     `<div class="view-heading"><div><h2>成果</h2><p>代码走 GitHub 分支；文档、模型和演示文件暂存在中心。</p></div><button class="button" data-action="upload">${icon('upload')}上传文件</button></div>` +
     (!files.length
       ? emptyState('还没有成果文件', '成员把文件放进任务的 arena-exports/ 后会自动出现，也可以手动上传。')
       : `<div class="file-list">${files.map((file) => `<div class="file-row"><span>${icon(file.name.endsWith('.blend') ? 'cube' : 'file')}</span><div class="file-row-main"><strong>${e(file.name)}</strong><small>${size(file.size)} · ${dateLabel(file.created)}${file.pinned ? ' · 已保留' : ''}</small></div><div class="file-row-actions">${/\.(txt|md|json|csv|py|js|ts|css|html?|svg|log|png|jpe?g|gif|webp|avif|bmp)$/i.test(file.name) ? `<button class="icon-button" data-action="preview-file" data-id="${e(file.id)}" title="预览" aria-label="预览 ${e(file.name)}">${icon('file')}</button>` : ''}<button class="icon-button ${file.pinned ? 'pinned' : ''}" data-action="pin-file" data-id="${e(file.id)}" title="${file.pinned ? '取消保留' : '保留'}" aria-label="${file.pinned ? '取消保留' : '保留'} ${e(file.name)}">${icon('pin')}</button><button class="icon-button" data-action="download-file" data-id="${e(file.id)}" title="下载" aria-label="下载 ${e(file.name)}">${icon('download')}</button>${!file.pinned ? `<button class="icon-button" data-action="delete-file" data-id="${e(file.id)}" title="删除" aria-label="删除 ${e(file.name)}">${icon('trash')}</button>` : ''}</div></div>`).join('')}</div>`) +
-    `<div class="file-storage"><span title="接近上限时暂停新增对话、任务和成果，保留已有数据">中心已用 ${size(state.storage.used)} / 存储上限 ${size(state.storage.quota)}</span><button class="text-link" data-action="cleanup">清理未保留的旧文件</button></div>`;
+    `<div class="file-storage"><span>中心 ${size(storage.used)} / ${size(storage.quota)} · ${e(centerReason)}${storage.disk_free_bytes != null ? ` · 磁盘剩余 ${size(storage.disk_free_bytes)}` : ''}</span><button class="text-link" data-action="cleanup">清理未保留的旧文件</button></div>${machines ? `<div class="file-list">${machines}</div>` : ''}`;
 }
 
 export function renderLogs(state) {

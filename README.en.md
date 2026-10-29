@@ -49,6 +49,8 @@ Run your own hub and connect computers through Tailscale, without a public IP. W
 
 ## Recent updates
 
+- **Memory, summaries and storage:** inspect memory sources and correct channel summaries; view hub and worker space, preview reclaimable workspaces, and confirm cleanup after the idle worker rechecks them.
+
 - **Conversation summaries and storage limits (v1.17.0):** incrementally summarize long conversations. The hub has a 5 GB default budget; worker workspaces have their own budget. New work pauses when space is low, while existing data remains available.
 - **Conversation storage (v1.16.1):** compress new long messages when it saves space, while keeping full-text search and retrieval.
 - **Conversation history (v1.15.0):** search or page through older messages, respecting shared and personal channels.

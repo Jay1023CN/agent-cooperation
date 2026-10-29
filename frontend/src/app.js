@@ -65,6 +65,8 @@ let artifactPreviewSerial = 0;
 let teamIdentities = [];
 let memoryScope = 'project';
 let memories = [];
+let conversationSummary = null;
+let workspacePreviewSelection = null;
 let memoryLoadSerial = 0;
 let unreadDrafts = new Map();
 let networkAddress = null;
@@ -103,6 +105,9 @@ function showLogin() {
   refreshSerial += 1;
   pollInFlight = false;
   memories = [];
+  conversationSummary = null;
+  workspacePreviewSelection = null;
+  memoryLoadSerial += 1;
   unreadDrafts.clear();
   submissions.clear();
   state = emptySnapshot();
@@ -245,7 +250,7 @@ function render() {
   renderReviews(state);
   renderFiles(state);
   renderLogs(state);
-  renderMemories(memories, memoryScope);
+  renderMemories(memories, memoryScope, conversationSummary);
   renderOverview(state, project());
   refreshTaskDialog();
   $('#message-input').disabled = !p || demo;
@@ -457,7 +462,8 @@ function openInvite(kind = 'member') {
 async function loadMemories(showError = false) {
   if (!project()) {
     memories = [];
-    renderMemories(memories, memoryScope);
+    conversationSummary = null;
+    renderMemories(memories, memoryScope, conversationSummary);
     return;
   }
   const id = currentProject,
@@ -489,14 +495,21 @@ async function loadMemories(showError = false) {
             },
           ]
         : [];
-    renderMemories(memories, memoryScope);
+    conversationSummary = null;
+    renderMemories(memories, memoryScope, conversationSummary);
     return;
   }
   try {
-    const result = await api(`/api/projects/${encodeURIComponent(id)}/memories?scope=${scope}`);
+    const [result, summary] = await Promise.all([
+      api(`/api/projects/${encodeURIComponent(id)}/memories?scope=${scope}`),
+      api(
+        `/api/projects/${encodeURIComponent(id)}/conversation-summary?channel=${scope === 'project' ? 'shared' : 'personal'}`,
+      ),
+    ]);
     if (serial !== memoryLoadSerial || id !== currentProject || scope !== memoryScope) return;
     memories = result.memories || [];
-    renderMemories(memories, memoryScope);
+    conversationSummary = summary;
+    renderMemories(memories, memoryScope, conversationSummary);
   } catch (error) {
     if (showError) throw error;
   }
@@ -534,6 +547,141 @@ function openMemoryEditor(id) {
       closeModal();
       await loadMemories(true);
       toast('记忆已保存。');
+    },
+  );
+}
+async function openMemorySource(id) {
+  if (!editable() || !requireProject()) return;
+  const requestedProject = currentProject;
+  const requestedScope = memoryScope;
+  const result = await api(`/api/memories/${encodeURIComponent(id)}/source`);
+  if (requestedProject !== currentProject || requestedScope !== memoryScope) return;
+  const message = result.message;
+  openModal(
+    '记忆来源',
+    message ? `${message.author} · ${dateLabel(message.created)}` : '没有可查看的原始对话',
+    message
+      ? `<div class="detail-section"><p>${e(message.content)}</p></div><div class="modal-actions"><button class="button" type="button" data-action="close-modal">关闭</button></div>`
+      : '<div class="modal-actions"><button class="button" type="button" data-action="close-modal">关闭</button></div>',
+  );
+}
+function openConversationSummaryEditor() {
+  if (!editable() || !requireProject() || !conversationSummary?.revision) return;
+  const id = currentProject;
+  const requestedChannel = memoryScope === 'project' ? 'shared' : 'personal';
+  const existing = conversationSummary;
+  openModal(
+    '更正对话摘要',
+    requestedChannel === 'shared' ? '团队后续对话会参考这份摘要。' : '只有你的个人会话会参考这份摘要。',
+    `<div class="field"><label for="f-conversation-summary">摘要内容</label><textarea name="summary" id="f-conversation-summary" rows="8" required maxlength="8000">${e(existing.summary)}</textarea></div>${modalActions('保存摘要')}`,
+    async (form) => {
+      await api(`/api/projects/${encodeURIComponent(id)}/conversation-summary?channel=${requestedChannel}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          summary: String(form.get('summary') || '').trim(),
+          expected_revision: existing.revision,
+        }),
+      });
+      closeModal();
+      if (currentProject === id) await loadMemories(true);
+      toast('摘要已更新。');
+    },
+  );
+}
+async function openWorkspacePreview(machineId) {
+  if (!editable()) return;
+  const machine = state.machines.find((item) => item.id === machineId);
+  if (!machine) return;
+  const preview = await post('/api/workspaces/cleanup-previews', { machine_id: machineId, keep: 3 });
+  await showWorkspacePreview(machine, preview.id);
+}
+async function showWorkspacePreview(machine, previewId) {
+  workspacePreviewSelection = null;
+  openModal(
+    `${machine.name} · 工作区预览`,
+    '执行电脑会检查本地文件和 GitHub 同步状态，这一步不会删除文件。',
+    '<div id="workspace-preview-body"><p>正在等待执行电脑检查…</p></div><div class="modal-actions"><button class="button" type="button" data-action="close-modal">关闭</button></div>',
+  );
+  const generation = modalGeneration;
+  async function poll() {
+    if (generation !== modalGeneration) return;
+    try {
+      const result = await api(`/api/workspaces/cleanup-previews/${encodeURIComponent(previewId)}`);
+      if (generation !== modalGeneration) return;
+      const target = $('#workspace-preview-body');
+      if (!target) return;
+      if (result.status === 'pending' || result.status === 'running') {
+        target.innerHTML = `<p>${result.status === 'pending' ? '等待执行电脑接收检查…' : '正在核对工作区和 GitHub…'}</p>`;
+        setTimeout(poll, 3000);
+        return;
+      }
+      if (result.status !== 'complete') {
+        target.innerHTML = `<p>${e(result.result?.error || '检查没有完成，请确认电脑在线后重试。')}</p>`;
+        return;
+      }
+      if (result.apply_status === 'pending' || result.apply_status === 'running') {
+        target.innerHTML = `<p>${result.apply_status === 'pending' ? '等待执行电脑空闲后清理…' : '正在重新核对并清理已确认的工作区…'}</p>`;
+        setTimeout(poll, 3000);
+        return;
+      }
+      if (result.apply_status === 'unknown' || result.apply_status === 'expired') {
+        target.innerHTML =
+          '<p>清理结果尚未确认。请先检查执行电脑上的工作区，再决定下一步；平台不会自动重复执行。</p>';
+        return;
+      }
+      if (result.apply_status === 'failed') {
+        target.innerHTML = `<p>${e(result.apply_result?.error || '清理未能完成，请检查执行电脑上的工作区。')}</p>`;
+        return;
+      }
+      if (result.apply_status === 'complete') {
+        const outcome = result.apply_result || {};
+        target.innerHTML = `<p>清理完成，已回收 ${size(outcome.reclaimed_bytes || 0)}；${outcome.retained?.length || 0} 个工作区因状态变化继续保留。</p>`;
+        return;
+      }
+      const report = result.result || {};
+      const describe = (items) =>
+        (items || [])
+          .map((item) => {
+            const projectName =
+              state.projects.find((project) => project.id === item.project_id)?.name || '项目';
+            const title =
+              state.tasks.find((task) => task.id === item.task_id)?.title || `${projectName} · 任务工作区`;
+            const label = item.release ? `${title} · 发布目录` : title;
+            return `<li>${e(label)} · ${e(item.reason)}${item.bytes ? ` · ${size(item.bytes)}` : ''}</li>`;
+          })
+          .join('');
+      const selected = (report.candidates || []).slice(0, 20);
+      workspacePreviewSelection = { id: previewId, machine, candidates: selected };
+      target.innerHTML = `<p>可回收 ${size(report.reclaimable_bytes || 0)} · ${report.candidate_count || 0} 个工作区可清理，${report.preserved_count || 0} 个保留。</p>${selected.length ? `<h3>本次可清理${report.candidate_count > selected.length ? '（前 20 项）' : ''}</h3><ul>${describe(selected)}</ul><button class="button" type="button" data-action="apply-workspaces">确认清理以上工作区</button>` : ''}${report.preserved?.length ? `<h3>继续保留</h3><ul>${describe(report.preserved.slice(0, 8))}</ul>` : ''}<p>${e(result.next_step || '')}</p>`;
+    } catch (error) {
+      if (generation === modalGeneration) {
+        const target = $('#workspace-preview-body');
+        if (target) target.textContent = error.message;
+      }
+    }
+  }
+  await poll();
+}
+function confirmWorkspaceCleanup() {
+  const selection = workspacePreviewSelection;
+  if (!editable() || !selection?.candidates.length) return;
+  openModal(
+    '确认清理工作区',
+    selection.machine.name,
+    `<p>只清理刚才列出的 ${selection.candidates.length} 个工作区。执行电脑空闲后会重新核对任务、文件和 GitHub 提交；有变化的会保留。</p>${modalActions('确认清理')}`,
+    async () => {
+      const candidates = selection.candidates.map(({ project_id, task_id, attempt, commit, release }) => ({
+        project_id,
+        task_id,
+        attempt,
+        commit,
+        release: Boolean(release),
+      }));
+      await post(`/api/workspaces/cleanup-previews/${encodeURIComponent(selection.id)}/apply`, {
+        candidates,
+      });
+      workspacePreviewSelection = null;
+      await showWorkspacePreview(selection.machine, selection.id);
     },
   );
 }
@@ -982,6 +1130,9 @@ function paletteItems() {
 }
 async function selectProject(id) {
   currentProject = id;
+  memories = [];
+  conversationSummary = null;
+  memoryLoadSerial += 1;
   messageSignature = '';
   $('#message-input').value = unreadDrafts.get(`${currentProject}:${channel}`) || '';
   closeSidebar();
@@ -1061,10 +1212,13 @@ document.addEventListener('click', async (event) => {
     else if (action === 'agent') openAgent(button.dataset.id, state, openModal);
     else if (action === 'new-memory') openMemoryEditor();
     else if (action === 'edit-memory') openMemoryEditor(button.dataset.id);
+    else if (action === 'memory-source') await openMemorySource(button.dataset.id);
+    else if (action === 'edit-conversation-summary') openConversationSummaryEditor();
     else if (action === 'memory-scope') {
       memoryScope = button.dataset.scope;
       memories = [];
-      renderMemories(memories, memoryScope);
+      conversationSummary = null;
+      renderMemories(memories, memoryScope, conversationSummary);
       await loadMemories(true);
     } else if (action === 'memory-status' && editable()) {
       const item = memories.find((value) => value.id === button.dataset.id);
@@ -1221,6 +1375,8 @@ document.addEventListener('click', async (event) => {
       if (modalTaskId === button.dataset.task) openTask(button.dataset.task);
       toast('已提交操作决定。');
     } else if (action === 'upload') await uploadFile();
+    else if (action === 'preview-workspaces') await openWorkspacePreview(button.dataset.id);
+    else if (action === 'apply-workspaces') confirmWorkspaceCleanup();
     else if (action === 'preview-file') await previewFile(button.dataset.id);
     else if (action === 'download-file') {
       if (!editable()) return;
