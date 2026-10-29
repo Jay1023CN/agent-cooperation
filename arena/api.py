@@ -5,6 +5,7 @@ import contextlib
 import json
 import re
 import secrets
+import shutil
 import time
 from pathlib import Path
 from typing import Annotated, Literal
@@ -16,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from .github_web import GitHubWeb, GitHubWebError
-from .store import ACTIVE, Conflict, Store, digest, encoded, uid
+from .store import ACTIVE, MIN_FREE_DISK_BYTES, Conflict, StorageFull, Store, digest, encoded, uid
 
 Short = Annotated[str, Field(min_length=1, max_length=200)]
 Long = Annotated[str, Field(min_length=1, max_length=40_000)]
@@ -328,6 +329,19 @@ class MemoryConsolidation(Input):
         return value.strip()
 
 
+class ConversationSummary(Input):
+    summary: str = Field(min_length=1, max_length=8000)
+    through_id: Short
+    expected_revision: int = Field(ge=0)
+
+    @field_validator("summary")
+    @classmethod
+    def meaningful_summary(cls, value):
+        if not value.strip():
+            raise ValueError("对话摘要不能为空")
+        return value.strip()
+
+
 class Cleanup(Input):
     project_id: Short
     keep: int = Field(default=3, ge=0, le=100)
@@ -402,6 +416,10 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
     @app.exception_handler(Conflict)
     async def handle_conflict(_request: Request, exc: Conflict):
         return JSONResponse({"detail": str(exc)}, status_code=409)
+
+    @app.exception_handler(StorageFull)
+    async def handle_storage_full(_request: Request, exc: StorageFull):
+        return JSONResponse({"detail": str(exc)}, status_code=507)
 
     @app.middleware("http")
     async def headers_and_body_limit(request: Request, call_next):
@@ -973,6 +991,7 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
             previous = receipt_read(actor["id"], operation, request_id, body)
             if previous is not None:
                 return previous
+            store.ensure_capacity(len(data.content.encode("utf-8")) * 2 + 131_072)
             message_id = uid()
             channel = f'personal:{actor["id"]}' if data.channel == "personal" else "shared"
             store.save_message(message_id, project_id, actor["name"], data.content, channel, time.time())
@@ -1014,6 +1033,7 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
             previous = receipt_read(actor["id"], operation, request_id, body)
             if previous is not None:
                 return previous
+            store.ensure_capacity(len(encoded(body).encode("utf-8")) * 2 + 131_072)
             validate_task(data, project_id)
             for ref in [*data.dependencies, *([data.parent_id] if data.parent_id else [])]:
                 if visible_task(actor, ref)["channel"] != "shared":
@@ -1444,6 +1464,11 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
             project_id = task["project_id"]
             private_owner = task["channel"].partition(":")[2] if task["channel"] != "shared" else None
             snapshot = store.snapshot(project_id, "personal" if private_owner else "shared", private_owner)
+            summaries = store.all(
+                "SELECT channel,summary,revision FROM conversation_summaries WHERE project_id=? AND channel IN (?,?)",
+                (project_id, "shared", task["channel"]),
+            )
+            origin = store.one("SELECT task_id FROM conversation_origins WHERE task_id=?", (task["id"],))
             return {
                 "task": store.public_task(task),
                 "project": store.project(project_id),
@@ -1455,7 +1480,42 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
                 "source": store.public_task(store.task(task["source_id"])) if task["source_id"] else None,
                 "dependencies": [store.public_task(store.task(d)) for d in task["dependencies"]],
                 "memories": task.get("memory_snapshot", []),
+                "conversation_summaries": summaries,
+                "compaction": (
+                    store.conversation_compaction(project_id, task["channel"])
+                    if task["kind"] == "leader" and origin
+                    else None
+                ),
             }
+
+    @app.post("/api/runs/conversation-summary")
+    def run_conversation_summary(data: ConversationSummary, request: Request):
+        with store.tx():
+            task, _ = run(request)
+            if task["kind"] != "leader" or not store.one(
+                "SELECT task_id FROM conversation_origins WHERE task_id=?", (task["id"],)
+            ):
+                raise Conflict("只有处理成员对话的负责人可以整理摘要")
+            plan = store.conversation_compaction(task["project_id"], task["channel"])
+            if not plan or plan["revision"] != data.expected_revision or plan["through_id"] != data.through_id:
+                raise Conflict("对话摘要已更新，请重新读取后整理")
+            last = plan["messages"][-1]
+            store.db.execute(
+                "INSERT INTO conversation_summaries VALUES(?,?,?,?,?,?,?) "
+                "ON CONFLICT(project_id,channel) DO UPDATE SET summary=excluded.summary,"
+                "through_created=excluded.through_created,through_id=excluded.through_id,"
+                "revision=excluded.revision,updated=excluded.updated",
+                (
+                    task["project_id"],
+                    task["channel"],
+                    data.summary,
+                    last["created"],
+                    last["id"],
+                    data.expected_revision + 1,
+                    time.time(),
+                ),
+            )
+            return {"revision": data.expected_revision + 1, "through_id": data.through_id}
 
     @app.get("/api/runs/history")
     def run_history(
@@ -1635,6 +1695,7 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
             previous = receipt_read(receipt_actor, "task", request_id, body)
             if previous is not None:
                 return previous
+            store.ensure_capacity(len(encoded(body).encode("utf-8")) * 2 + 131_072)
             if task["kind"] == "reviewer":
                 raise Conflict("验收成员请提交验收结论，由负责人安排后续工作")
             if data.kind != "worker" and task["kind"] != "leader":
@@ -1869,10 +1930,12 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
                         received += len(chunk)
                         if received > MAX_ARTIFACT_BYTES:
                             raise HTTPException(413, "单个产物最多 128 MiB")
-                        if used + received > store.quota:
+                        if used + received + store.storage_headroom() > store.quota:
                             raise HTTPException(413, "暂存空间已满，请清理已交付且未固定的旧产物")
+                        if shutil.disk_usage(store.root).free < len(chunk) + MIN_FREE_DISK_BYTES:
+                            raise StorageFull("电脑剩余空间不足，已暂停新增数据，请先释放磁盘空间")
                         output.write(chunk)
-                if storage_used(exclude=temporary) + received > store.quota:
+                if storage_used(exclude=temporary) + received + store.storage_headroom() > store.quota:
                     raise HTTPException(413, "暂存空间已满")
                 with store.tx():
                     # Revalidate a run after a potentially long streaming upload.

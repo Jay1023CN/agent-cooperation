@@ -49,7 +49,8 @@ Run your own hub and connect computers through Tailscale, without a public IP. W
 
 ## Recent updates
 
-- **Conversation storage (v1.16.1):** compress new long messages when it saves space, while keeping full-text search and retrieval. Storage usage is distinguished from the artifact upload quota.
+- **Conversation summaries and storage limits:** incrementally summarize long conversations. The hub has a 5 GB default budget; worker workspaces have their own budget. New work pauses when space is low, while existing data remains available.
+- **Conversation storage (v1.16.1):** compress new long messages when it saves space, while keeping full-text search and retrieval.
 - **Conversation history (v1.15.0):** search or page through older messages, respecting shared and personal channels.
 
 - **Automatic memory (v1.14.0):** learn preferences and project conventions from conversations, with search, consolidation, editing and deletion.

@@ -765,6 +765,116 @@ def test_agent_can_search_and_page_older_conversation_without_leaking_private_me
     assert {message["id"] for message in private_results} == {"private", "history000"}
 
 
+def test_conversation_summary_is_incremental_and_channel_scoped(arena):
+    client, store = arena
+    p = project(client)
+    owner = client.get("/api/me").json()["id"]
+    with store.tx():
+        for channel in ("shared", f"personal:{owner}"):
+            for index in range(45):
+                store.save_message(f"{channel}-{index:03}", p["id"], "成员", f"讨论内容 {index}", channel, index + 1)
+    client.post(f'/api/projects/{p["id"]}/messages', json={"content": "继续"})
+    machine_auth, _ = machine(client, roles=["leader"])
+    _, auth = claim(client, machine_auth)
+    context = client.get("/api/runs/context", headers=auth).json()
+    plan = context["compaction"]
+    assert plan["revision"] == 0 and len(plan["messages"]) == 34
+    assert all(row["id"].startswith("shared-") for row in plan["messages"])
+    data = {"summary": "已决定先做首页，下一步检查布局", "through_id": plan["through_id"], "expected_revision": 0}
+    assert client.post("/api/runs/conversation-summary", headers=auth, json=data).status_code == 200
+    assert client.post("/api/runs/conversation-summary", headers=auth, json=data).status_code == 409
+    assert client.get("/api/runs/history/" + plan["messages"][0]["id"], headers=auth).status_code == 200
+    assert client.post("/api/runs/complete", headers=auth, json={"result": "收到"}).status_code == 200
+    client.post(f'/api/projects/{p["id"]}/messages', json={"content": "私人对话", "channel": "personal"})
+    _, private_auth = claim(client, machine_auth)
+    private = client.get("/api/runs/context", headers=private_auth).json()
+    assert private["conversation_summaries"][0]["summary"] == data["summary"]
+    private_plan = private["compaction"]
+    assert all(row["id"].startswith("personal:") for row in private_plan["messages"])
+    saved = client.post(
+        "/api/runs/conversation-summary",
+        headers=private_auth,
+        json={
+            "summary": "私人偏好",
+            "through_id": private_plan["through_id"],
+            "expected_revision": 0,
+        },
+    )
+    assert saved.status_code == 200
+    assert client.get("/api/runs/context", headers=auth).status_code == 410
+    assert client.post("/api/runs/complete", headers=private_auth, json={"result": "收到"}).status_code == 200
+    client.post(f'/api/projects/{p["id"]}/messages', json={"content": "继续共享讨论"})
+    _, shared_auth = claim(client, machine_auth)
+    shared_context = client.get("/api/runs/context", headers=shared_auth).json()
+    summaries = shared_context["conversation_summaries"]
+    assert [entry["summary"] for entry in summaries] == [data["summary"]]
+    with store.tx():
+        for index in range(40):
+            store.save_message(f"new{index:03}", p["id"], "成员", f"新的进展 {index}", "shared", 100 + index)
+    next_plan = client.get("/api/runs/context", headers=shared_auth).json()["compaction"]
+    assert next_plan["revision"] == 1 and next_plan["summary"] == data["summary"]
+    assert "shared-000" not in {row["id"] for row in next_plan["messages"]}
+    updated = client.post(
+        "/api/runs/conversation-summary",
+        headers=shared_auth,
+        json={
+            "summary": "已完成首页，继续检查移动端",
+            "through_id": next_plan["through_id"],
+            "expected_revision": 1,
+        },
+    )
+    assert updated.status_code == 200 and updated.json()["revision"] == 2
+
+
+def test_center_quota_blocks_new_work_and_keeps_existing_data(arena):
+    client, store = arena
+    p = project(client)
+    assert client.post(f'/api/projects/{p["id"]}/messages', json={"content": "原有对话"}).status_code == 201
+    before = client.get("/api/state", params={"project_id": p["id"]}).json()
+    store.quota = store.storage_used() + 1_048_576
+    message = client.post(f'/api/projects/{p["id"]}/messages', json={"content": "新增对话"})
+    task = client.post(f'/api/projects/{p["id"]}/tasks', json={"title": "新增任务", "prompt": "工作"})
+    assert message.status_code == 507 and task.status_code == 507
+    artifact = client.post(f'/api/projects/{p["id"]}/artifacts', params={"name": "output.txt"}, content=b"data")
+    assert artifact.status_code == 413 and list((store.root / "artifacts").iterdir()) == []
+    after = client.get("/api/state", params={"project_id": p["id"]}).json()
+    assert [m["content"] for m in after["messages"]] == [m["content"] for m in before["messages"]]
+    assert len(after["tasks"]) == len(before["tasks"])
+
+
+def test_center_reserves_space_on_host_disk(arena, monkeypatch):
+    from collections import namedtuple
+
+    from arena import store as arena_store
+
+    client, _ = arena
+    p = project(client)
+    usage = namedtuple("usage", "total used free")
+    monkeypatch.setattr(arena_store.shutil, "disk_usage", lambda _: usage(1_000_000_000, 900_000_000, 100_000_000))
+    response = client.post(f'/api/projects/{p["id"]}/messages', json={"content": "新消息"})
+    assert response.status_code == 507 and "剩余空间不足" in response.json()["detail"]
+
+
+def test_database_page_limit_prevents_unbounded_growth(arena):
+    from arena.store import StorageFull
+
+    _, store = arena
+    with store.tx():
+        store.db.execute("CREATE TABLE large_records (content TEXT)")
+    page_size = store.db.execute("PRAGMA page_size").fetchone()[0]
+    page_count = store.db.execute("PRAGMA page_count").fetchone()[0]
+    other = sum(
+        path.stat().st_size
+        for path in store.root.rglob("*")
+        if path.is_file() and path.name not in {"arena.db", "arena.db-wal", "arena.db-shm"}
+    )
+    store.quota = other + 1_048_576 + (page_count + 2) * page_size
+    with pytest.raises(StorageFull):
+        with store.tx():
+            store.db.execute("INSERT INTO large_records VALUES (?)", ("x" * 500_000,))
+    assert store.one("SELECT COUNT(*) AS n FROM large_records")["n"] == 0
+
+
 def test_long_new_messages_are_compressed_without_losing_search_or_full_text(arena):
     client, store = arena
     p = project(client)

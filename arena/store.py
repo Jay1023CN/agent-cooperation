@@ -5,6 +5,7 @@ import hashlib
 import json
 import re
 import secrets
+import shutil
 import sqlite3
 import threading
 import time
@@ -16,9 +17,14 @@ from .routing import evaluate
 
 ACTIVE = ("queued", "running", "in_review", "coordinating")
 ROLES = ("leader", "worker", "reviewer", "publisher")
+MIN_FREE_DISK_BYTES = 1_073_741_824
 
 
 class Conflict(ValueError):
+    pass
+
+
+class StorageFull(ValueError):
     pass
 
 
@@ -51,6 +57,7 @@ class Store:
         )
         self.db.executescript("""
         PRAGMA journal_mode=WAL;
+        PRAGMA wal_autocheckpoint=128;
         PRAGMA foreign_keys=ON;
         CREATE TABLE IF NOT EXISTS identities (
           id TEXT PRIMARY KEY, name TEXT NOT NULL, kind TEXT NOT NULL,
@@ -98,6 +105,10 @@ class Store:
         CREATE INDEX IF NOT EXISTS memories_scope ON memories(scope,scope_id,status);
         CREATE TABLE IF NOT EXISTS conversation_origins (
           task_id TEXT PRIMARY KEY, message_id TEXT NOT NULL, member_id TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS conversation_summaries (
+          project_id TEXT NOT NULL, channel TEXT NOT NULL, summary TEXT NOT NULL,
+          through_created REAL NOT NULL, through_id TEXT NOT NULL, revision INTEGER NOT NULL, updated REAL NOT NULL,
+          PRIMARY KEY(project_id,channel));
         CREATE INDEX IF NOT EXISTS tasks_project ON tasks(project_id, created);
         CREATE INDEX IF NOT EXISTS messages_history ON messages(project_id, channel, created, id);
         CREATE INDEX IF NOT EXISTS events_project ON events(project_id, id);
@@ -148,13 +159,55 @@ class Store:
     @contextlib.contextmanager
     def tx(self):
         with self.lock:
-            self.db.execute("BEGIN IMMEDIATE")
             try:
+                self.limit_database()
+                self.db.execute("BEGIN IMMEDIATE")
                 yield
                 self.db.commit()
+            except sqlite3.OperationalError as exc:
+                self.db.rollback()
+                if getattr(exc, "sqlite_errorcode", None) == sqlite3.SQLITE_FULL:
+                    raise StorageFull("中心存储已达到上限，请清理未保留的成果或提高存储额度") from exc
+                raise
             except BaseException:
                 self.db.rollback()
                 raise
+
+    def storage_used(self):
+        total = 0
+        for path in self.root.rglob("*"):
+            if path.is_file() and not path.is_symlink():
+                with contextlib.suppress(FileNotFoundError):
+                    total += path.stat().st_size
+        return total
+
+    def limit_database(self):
+        """Keep SQLite growth within the configured center budget, with WAL headroom."""
+        database_files = {"arena.db", "arena.db-wal", "arena.db-shm"}
+        other = 0
+        for path in self.root.rglob("*"):
+            if (
+                path.is_file()
+                and not path.is_symlink()
+                and not (path.parent == self.root and path.name in database_files)
+            ):
+                with contextlib.suppress(FileNotFoundError):
+                    other += path.stat().st_size
+        page_size = self.db.execute("PRAGMA page_size").fetchone()[0]
+        pages = self.db.execute("PRAGMA page_count").fetchone()[0]
+        headroom = self.storage_headroom()
+        limit = max(pages, max(0, self.quota - other - headroom) // page_size)
+        self.db.execute(f"PRAGMA max_page_count={limit}")
+
+    def ensure_capacity(self, additional=0):
+        reserve = self.storage_headroom()
+        if self.storage_used() + additional + reserve > self.quota:
+            raise StorageFull("中心存储已达到上限，请清理未保留的成果或提高存储额度")
+        if shutil.disk_usage(self.root).free < additional + MIN_FREE_DISK_BYTES:
+            raise StorageFull("电脑剩余空间不足，已暂停新增数据，请先释放磁盘空间")
+
+    def storage_headroom(self):
+        return min(max(self.quota // 100, 1_048_576), 32 * 1_048_576)
 
     def one(self, sql, params=()):
         row = self.db.execute(sql, params).fetchone()
@@ -182,6 +235,36 @@ class Store:
         )
         if use_compression:
             self.db.execute("INSERT INTO message_payloads VALUES(?,?)", (message_id, compressed))
+
+    def conversation_compaction(self, project_id, channel):
+        """Prepare a bounded, ordered older slice, leaving recent messages intact."""
+        checkpoint = self.one(
+            "SELECT * FROM conversation_summaries WHERE project_id=? AND channel=?", (project_id, channel)
+        )
+        created = checkpoint["through_created"] if checkpoint else -1
+        last_id = checkpoint["through_id"] if checkpoint else ""
+        rows = self.all(
+            "SELECT m.id,m.author,COALESCE(arena_message_text(p.payload),m.content) AS content,m.created "
+            "FROM messages m LEFT JOIN message_payloads p ON p.message_id=m.id "
+            "WHERE m.project_id=? AND m.channel=? AND (m.created>? OR (m.created=? AND m.id>?)) "
+            "ORDER BY m.created,m.id LIMIT 151",
+            (project_id, channel, created, created, last_id),
+        )
+        older = rows[:-12]
+        if not older or (len(rows) < 40 and sum(len(row["content"]) for row in rows) < 12000):
+            return None
+        selected, size = [], 0
+        for row in older:
+            if selected and size + len(row["content"]) > 24000:
+                break
+            selected.append(row)
+            size += len(row["content"])
+        return {
+            "summary": checkpoint["summary"] if checkpoint else "",
+            "revision": checkpoint["revision"] if checkpoint else 0,
+            "messages": selected,
+            "through_id": selected[-1]["id"],
+        }
 
     def new_identity(self, name, kind):
         token = secrets.token_urlsafe(32)
