@@ -14,6 +14,21 @@ from agent_link.desktop_handoff import build_server
 from agent_link.handoff_store import HandoffStore
 
 
+def test_native_handoff_config_uses_bundled_entry_without_python(tmp_path, monkeypatch, capsys):
+    from agent_link.desktop_handoff import main
+
+    executable = str(tmp_path / "程序目录" / "pal-arena.exe")
+    database = str(tmp_path / "handoff.sqlite")
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", executable)
+    monkeypatch.setattr(sys, "argv", [executable, "--db", database, "--role", "desktop", "--print-config"])
+    main()
+    config = json.loads(capsys.readouterr().out)["mcpServers"]["desktop-handoff"]
+    assert config["command"] == executable
+    assert config["args"] == ["internal-handoff", "--db", database, "--role", "desktop"]
+    assert not (tmp_path / "handoff.sqlite").exists()
+
+
 @pytest.mark.asyncio
 async def test_host_and_desktop_handoff_through_separate_mcp_processes(tmp_path):
     db = tmp_path / "handoffs.sqlite"
@@ -42,12 +57,24 @@ async def test_host_and_desktop_handoff_through_separate_mcp_processes(tmp_path)
             "verify_git_delivery",
             "renew_task",
             "cancel_task",
+            "channel_capabilities",
+            "post_message",
+            "read_messages",
+            "wait_for_update",
+            "list_listeners",
         }
         assert {x.name for x in (await desktop.list_tools()).tools} == {
             "list_tasks",
             "claim_task",
             "task_status",
             "submit_result",
+            "channel_capabilities",
+            "post_message",
+            "read_messages",
+            "wait_for_update",
+            "next_task",
+            "complete_and_wait",
+            "report_progress",
         }
         first_workspace = tmp_path / "first-workspace"
         first_workspace.mkdir()

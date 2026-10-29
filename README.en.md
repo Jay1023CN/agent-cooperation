@@ -196,7 +196,7 @@ The upstream PAL `clink` tool and [PAL Agent Link](docs/agent-link.md) are kept:
 - [x] Scheduling: hard filters + policy ranking + recorded reasons; dependencies wait for upstream review to pass
 - [x] Git handoff: per-task directory and branch, commit SHA evidence, optional push to GitHub, a publisher that integrates reviewed commits
 - [x] Independent review and up to three automatic revisions; writes stop when a result is unknown, never auto-repeated
-- [x] Desktop handoff prototype and cross-computer task occupancy registry
+- [x] [Continuous desktop handoff](docs/desktop-handoff.md): targeted claims, progress, two-way messages and submit-and-wait; cross-computer task occupancy registry
 - [x] Commit and push under a member's own GitHub account, with the author checked before and after the push
 - [x] Sign in with GitHub; the hub refreshes tokens and hands each task a short-lived push credential
 - [x] One-command Tailscale sharing for the hub, with the address shown and pre-filled in the web UI
@@ -205,6 +205,7 @@ The upstream PAL `clink` tool and [PAL Agent Link](docs/agent-link.md) are kept:
 - [x] Windows x64 / macOS ARM64 packages and a Mac helper, published directly from GitHub
 - [ ] End-to-end runs on several real machines with real subscriptions
 - [ ] WorkBuddy and Multica status write-back
+- [ ] Local notification and real code claims in an existing Claude session (optional adapter implemented)
 - [ ] Dedicated Blender adapter and automatic checks that artifacts open
 
 Verification for this release:

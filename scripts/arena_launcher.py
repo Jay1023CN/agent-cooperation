@@ -81,6 +81,12 @@ def main():
         sys.argv.append(command)
     if command == "internal-exec":
         raise SystemExit(run_external(sys.argv[2:]))
+    if command == "internal-handoff-client":
+        from agent_link.handoff_client import main as client_main
+
+        sys.argv.pop(1)
+        client_main()
+        return
     if command == "internal-supervisor":
         from agent_link.process_owner import supervise
 
@@ -107,9 +113,15 @@ def main():
         from arena.desktop_mcp import main as entry
 
         sys.argv.pop(1)
+    elif command == "internal-handoff":
+        from agent_link.desktop_handoff import main as entry
+
+        sys.argv.pop(1)
     else:
         from arena.cli import main as entry
-    if command in ("internal-mcp", "internal-agent-link", "internal-desktop-mcp") and getattr(sys, "frozen", False):
+    if command in ("internal-mcp", "internal-agent-link", "internal-desktop-mcp", "internal-handoff") and getattr(
+        sys, "frozen", False
+    ):
         return run_stdio(entry)
     entry()
 

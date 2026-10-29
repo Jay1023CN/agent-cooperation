@@ -215,9 +215,16 @@ async def smoke_mcp(executable: Path, server_url: str, command="internal-mcp", e
                 "internal-mcp": {"context", "create_task", "report_review", "finish_project"},
                 "internal-agent-link": {"agent_create", "agent_send", "agent_read"},
                 "internal-desktop-mcp": {"next_task", "read_file", "write_file", "start_command", "submit_result"},
+                "internal-handoff": {"next_task", "complete_and_wait", "post_message", "wait_for_update"},
             }[command]
             if not required <= {t.name for t in result.tools}:
                 raise BundleError("Native MCP entry point did not expose the expected platform tools")
+            if command == "internal-handoff":
+                result = await session.call_tool(
+                    "next_task", {"consumer_id": "build-smoke", "request_id": "idle", "wait_seconds": 0}
+                )
+                if result.isError or json.loads(result.content[0].text).get("state") != "idle":
+                    raise BundleError("Native continuous handoff failed its idle request")
         error_log.seek(0)
         details = error_log.read()
         if "Traceback (most recent call last)" in details:
@@ -333,6 +340,36 @@ def smoke_bundle(executable: Path):
                             raise BundleError("Native server returned an empty application resource")
                 asyncio.run(asyncio.wait_for(smoke_mcp(executable, url), timeout=25))
                 asyncio.run(asyncio.wait_for(smoke_mcp(executable, url, "internal-agent-link"), timeout=25))
+                asyncio.run(
+                    asyncio.wait_for(
+                        smoke_mcp(
+                            executable,
+                            url,
+                            "internal-handoff",
+                            ["--db", str(root / "handoff 中文.sqlite"), "--role", "desktop"],
+                        ),
+                        timeout=25,
+                    )
+                )
+                handoff_client = subprocess.run(
+                    [
+                        str(executable),
+                        "internal-handoff-client",
+                        "--db",
+                        str(root / "handoff 中文.sqlite"),
+                        "next_task",
+                        json.dumps({"consumer_id": "bundle-client", "request_id": "smoke", "wait_seconds": 0}),
+                    ],
+                    cwd=root,
+                    env={**os.environ, "PATH": ""},
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    timeout=25,
+                    check=True,
+                )
+                if json.loads(handoff_client.stdout).get("state") != "idle":
+                    raise BundleError("Native handoff transport client failed without Python on PATH")
                 desktop_config = root / "desktop config 中文.json"
                 desktop_token = root / "desktop token 中文.txt"
                 desktop_config.write_text(

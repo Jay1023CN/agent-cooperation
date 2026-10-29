@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from agent_link.acp import ACP
 from agent_link.common import BridgeError, load_config
+from agent_link.handoff_channel import HandoffChannel
 from agent_link.handoff_store import HandoffStore
 from agent_link.server import Agents
 from tools.shared.base_tool import BaseTool
@@ -33,6 +34,12 @@ class AgentLinkRequest(BaseModel):
         "handoff_claim",
         "handoff_status",
         "handoff_submit",
+        "handoff_next",
+        "handoff_message",
+        "handoff_messages",
+        "handoff_progress",
+        "handoff_wait",
+        "handoff_continue",
     ]
     agent: Optional[Literal["antigravity", "opencode", "qoder", "qodercn", "dsh", "workbuddy"]] = None
     workspace: Optional[str] = None
@@ -51,6 +58,13 @@ class AgentLinkRequest(BaseModel):
     handle: Optional[str] = None
     summary: Optional[str] = None
     evidence: Optional[list[str]] = None
+    consumer_id: Optional[str] = None
+    request_id: Optional[str] = None
+    message_id: Optional[str] = None
+    message: Optional[str] = None
+    after: int = Field(default=0, ge=0, lt=2**63)
+    known_state: Literal["pending", "claimed", "submitted", "cancelled", "expired"] = "claimed"
+    wait_seconds: float = Field(default=25, ge=0, le=25, allow_inf_nan=False)
 
 
 class AgentLinkTool(BaseTool):
@@ -70,7 +84,9 @@ class AgentLinkTool(BaseTool):
             "WorkBuddy needs official OAuth. Submitting may edit workspace files; never automatically retry "
             "an uncertain submission. Use permission_reply only for user-authorized actions."
             " For this existing desktop conversation, handoff_list/claim/status/submit exchange local documents "
-            "with a host using handoff_db; they never start a model session or wake an idle conversation."
+            "with a host using handoff_db. handoff_next waits for work; handoff_message/progress and handoff_wait "
+            "exchange live task updates; handoff_continue submits and waits for the next task. Keep consumer_id stable "
+            "and preserve request_id after lost responses. They never start a model session or wake an idle application."
         )
 
     def get_input_schema(self) -> dict[str, Any]:
@@ -122,12 +138,15 @@ class AgentLinkTool(BaseTool):
             return adapter.read(session_id, request.limit)
         return adapter.wait(session_id, request.seconds)
 
-    def _handoff(self, request):
+    def _handoff_store(self, request):
         path = Path(self._required(request.handoff_db, "handoff_db")).expanduser()
         if not path.is_absolute() or not path.is_file():
             raise BridgeError("handoff_db must name an existing absolute local SQLite file shared with the host.")
         # Reuse the existing handoff protocol and leases; PAL adds no scheduler.
-        store = HandoffStore(path)
+        return HandoffStore(path)
+
+    def _handoff(self, request):
+        store = self._handoff_store(request)
         if request.action == "handoff_list":
             return {"tasks": store.pending()}
         lineage = self._required(request.lineage, "lineage")
@@ -136,6 +155,17 @@ class AgentLinkTool(BaseTool):
         handle = self._required(request.handle, "handle")
         if request.action == "handoff_status":
             return {"state": store.desktop_state(lineage, handle)}
+        if request.action == "handoff_messages":
+            return store.read_messages("desktop", lineage, request.after, request.limit, handle)
+        if request.action in ("handoff_message", "handoff_progress"):
+            return store.post_message(
+                "desktop",
+                lineage,
+                self._required(request.message_id, "message_id"),
+                self._required(request.message, "message"),
+                "progress" if request.action == "handoff_progress" else "note",
+                handle,
+            )
         summary = self._required(request.summary, "summary")
         evidence = request.evidence
         if not summary.strip() or not evidence or not all(item.strip() for item in evidence):
@@ -145,5 +175,33 @@ class AgentLinkTool(BaseTool):
 
     async def execute(self, arguments: dict[str, Any]) -> list[TextContent]:
         request = AgentLinkRequest.model_validate(arguments)
-        result = await asyncio.to_thread(self._dispatch, request)
+        if request.action in ("handoff_next", "handoff_wait", "handoff_continue"):
+            channel = HandoffChannel(await asyncio.to_thread(self._handoff_store, request))
+            if request.action == "handoff_next":
+                result = await channel.next_task(
+                    self._required(request.consumer_id, "consumer_id"),
+                    self._required(request.request_id, "request_id"),
+                    request.wait_seconds,
+                )
+            elif request.action == "handoff_wait":
+                result = await channel.wait_for_update(
+                    "desktop",
+                    self._required(request.lineage, "lineage"),
+                    request.after,
+                    request.known_state,
+                    request.wait_seconds,
+                    self._required(request.handle, "handle"),
+                )
+            else:
+                result = await channel.complete_and_wait(
+                    self._required(request.lineage, "lineage"),
+                    self._required(request.handle, "handle"),
+                    self._required(request.summary, "summary"),
+                    request.evidence,
+                    self._required(request.consumer_id, "consumer_id"),
+                    self._required(request.request_id, "request_id"),
+                    request.wait_seconds,
+                )
+        else:
+            result = await asyncio.to_thread(self._dispatch, request)
         return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]

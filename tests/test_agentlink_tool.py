@@ -84,3 +84,46 @@ async def test_pal_handoff_requires_existing_database_and_respects_expiry(tmp_pa
     store.expire("expired")
     with pytest.raises(HandoffError, match="missing or already claimed"):
         await tool.execute({"action": "handoff_claim", "handoff_db": str(database), "lineage": "expired"})
+
+
+@pytest.mark.asyncio
+async def test_pal_continuous_handoff_and_live_messages_never_launch_model(tmp_path):
+    store = HandoffStore(tmp_path / "db")
+    store.create("one", "task", {"recipient": "claude-ui", "prompt": "直接编写 UI"})
+    tool = AgentLinkTool()
+    tool.agents.get = Mock(side_effect=AssertionError("Must not launch another model session"))
+    common = {"handoff_db": str(tmp_path / "db")}
+
+    async def call(action, **params):
+        return json.loads((await tool.execute({"action": action, **common, **params}))[0].text)
+
+    claimed = await call("handoff_next", consumer_id="claude-ui", request_id="request", wait_seconds=0)
+    owned = {"lineage": "one", "handle": claimed["handle"]}
+    await call("handoff_progress", **owned, message_id="coding", message="界面正在修改")
+    assert store.read_messages("host", "one")["messages"][0]["text"] == "界面正在修改"
+    store.post_message("host", "one", "scope", "不要改测试", "directive")
+    update = await call("handoff_wait", **owned, wait_seconds=0)
+    assert update["messages"][0]["text"] == "不要改测试"
+    assert (await call("handoff_messages", **owned, after=update["next_after"]))["messages"] == []
+    with pytest.raises(Exception, match="evidence"):
+        await call(
+            "handoff_continue",
+            **owned,
+            summary="candidate",
+            consumer_id="claude-ui",
+            request_id="second",
+            wait_seconds=0,
+        )
+    assert store.inspect("one")["state"] == "claimed"
+    store.create("two", "task2", {"recipient": "claude-ui", "prompt": "下一项 UI"})
+    finished = await call(
+        "handoff_continue",
+        **owned,
+        summary="candidate",
+        evidence=["frontend/file.js"],
+        consumer_id="claude-ui",
+        request_id="second",
+        wait_seconds=0,
+    )
+    assert finished["state"] == "submitted"
+    assert finished["next"]["lineage"] == "two"

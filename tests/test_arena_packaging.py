@@ -30,6 +30,16 @@ spec.loader.exec_module(launcher)
         (["pal-arena", "internal-mcp"], "arena.mcp", ["pal-arena"]),
         (["pal-arena", "internal-agent-link", "--check"], "agent_link.server", ["pal-arena", "--check"]),
         (
+            ["pal-arena", "internal-handoff-client", "--db", "handoff.db", "next_task", "{}"],
+            "agent_link.handoff_client",
+            ["pal-arena", "--db", "handoff.db", "next_task", "{}"],
+        ),
+        (
+            ["pal-arena", "internal-handoff", "--db", "handoff.db", "--role", "desktop"],
+            "agent_link.desktop_handoff",
+            ["pal-arena", "--db", "handoff.db", "--role", "desktop"],
+        ),
+        (
             ["pal-arena", "internal-desktop-mcp", "--config", "x.json", "--token-file", "token.txt"],
             "arena.desktop_mcp",
             ["pal-arena", "--config", "x.json", "--token-file", "token.txt"],
