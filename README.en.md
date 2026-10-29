@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Jay1023CN/agent-cooperation/releases/tag/v1.18.0">Download v1.18.0</a> ·
+  <a href="https://github.com/Jay1023CN/agent-cooperation/releases/tag/v1.19.0">Download v1.19.0</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#how-it-works">Workflow</a> ·
   <a href="#supported-clients">Clients</a> ·
@@ -30,7 +30,7 @@ Claude Code, Codex and Qoder can each do the work. Splitting tasks, carrying con
 
 Run your own hub and connect computers through Tailscale, without a public IP. Workers use local clients and their existing sign-in state. Harnesses such as DSH retain their own model, provider and credential configuration.
 
-> **Current release: v1.18.0, early stage.** Windows and Mac packages are published and pass CI startup checks. A complete run across several real machines with real subscriptions is still pending. See [verification status](#what-works-today).
+> **Current release: v1.19.0, early stage.** Windows and Mac packages are published and pass CI startup checks. A complete run across several real machines with real subscriptions is still pending. See [verification status](#what-works-today).
 
 <table>
   <tr>
@@ -73,7 +73,7 @@ Run your own hub and connect computers through Tailscale, without a public IP. W
 - **Task history:** execution and independent-review logs in task details, with paginated history and a refresh prompt when new records arrive.
 - **Native delivery:** Windows x64, macOS ARM64 and a Mac setup helper are available. GitHub builds the packages, checks startup and hashes, and uploads release assets directly.
 
-[v1.18.0 release notes](https://github.com/Jay1023CN/agent-cooperation/releases/tag/v1.18.0) · [Full changelog](CHANGELOG.md)
+[v1.19.0 release notes](https://github.com/Jay1023CN/agent-cooperation/releases/tag/v1.19.0) · [Full changelog](CHANGELOG.md)
 
 ## Quick start
 
@@ -81,11 +81,11 @@ Run your own hub and connect computers through Tailscale, without a public IP. W
 
 Use an always-on computer for the hub and connect other computers as workers. Native packages include Python and the compiled UI; running them needs no separate Python or Node.js installation. Code tasks need Git, and each worker needs its chosen clients installed and configured.
 
-| Computer / purpose | v1.18.0 download |
+| Computer / purpose | v1.19.0 download |
 | --- | --- |
-| First-time setup on an Apple Silicon Mac mini | [Mac setup helper](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.18.0/Mac-mini-Setup-v1.18.0.zip) |
-| Apple Silicon Mac, manual hub or worker setup | [macOS ARM64 package](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.18.0/pal-arena-darwin-arm64-787f05ff42d4.tar.gz) · [SHA-256](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.18.0/pal-arena-darwin-arm64-787f05ff42d4.tar.gz.sha256) |
-| Intel / AMD Windows PC | [Windows x64 package](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.18.0/pal-arena-windows-amd64-787f05ff42d4.zip) · [SHA-256](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.18.0/pal-arena-windows-amd64-787f05ff42d4.zip.sha256) |
+| First-time setup on an Apple Silicon Mac mini | [Mac setup helper](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.19.0/Mac-mini-Setup-v1.19.0.zip) |
+| Apple Silicon Mac, manual hub or worker setup | [macOS ARM64 package](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.19.0/pal-arena-darwin-arm64-aff6ba3c67d4.tar.gz) · [SHA-256](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.19.0/pal-arena-darwin-arm64-aff6ba3c67d4.tar.gz.sha256) |
+| Intel / AMD Windows PC | [Windows x64 package](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.19.0/pal-arena-windows-amd64-aff6ba3c67d4.zip) · [SHA-256](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.19.0/pal-arena-windows-amd64-aff6ba3c67d4.zip.sha256) |
 
 The Mac helper downloads and verifies the pinned package, then sets up the hub to start when the current user signs in. For manual setup, follow the [verification and extraction guide](docs/arena-delivery.md#校验和解压), keep the whole extracted directory, and run `Start Server.command` on Mac or `Start Server.cmd` on Windows from its outermost folder.
 

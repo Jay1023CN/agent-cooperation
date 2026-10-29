@@ -4,17 +4,17 @@
 
 ## v1.19.0 (2026-10-29)
 
-### Chores
+### 整理
 
 - 更新工作台构建并移除未用字体
   ([`186c70b`](https://github.com/Jay1023CN/agent-cooperation/commit/186c70b97375a73925b2b91402bd8490db42e3a6))
 
-### Documentation
+### 文档
 
 - 更新 v1.18.0 下载与发布说明 [skip ci]
   ([`1403bed`](https://github.com/Jay1023CN/agent-cooperation/commit/1403bed609b8d32a391da3ae5c0a03d58f72e217))
 
-### Features
+### 新增
 
 - **ui**: 整体改为干净明亮的系统风格
   ([`73b9910`](https://github.com/Jay1023CN/agent-cooperation/commit/73b9910ca1d8ad97ebbfb255710b4c63fa2d6488))
