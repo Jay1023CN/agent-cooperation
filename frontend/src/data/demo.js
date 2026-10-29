@@ -280,6 +280,14 @@ export function demoState(channel = 'shared') {
       task_id: 't-3d0001',
       created: now - 200,
     },
+    {
+      id: 'f3',
+      name: '路线探索网页截图.png',
+      size: 2380000,
+      pinned: 0,
+      task_id: 't-web001',
+      created: now - 120,
+    },
   ];
   return {
     projects,
@@ -290,6 +298,14 @@ export function demoState(channel = 'shared') {
     events,
     artifacts,
     storage: { used: 1_240_000_000, quota: 5_000_000_000 },
+    conversation_summaries: {
+      shared: {
+        summary:
+          '确定做城市探索作品：网页负责路线探索，3D 场景展示街区，资料要能注明来源。手机和电脑都要能用；常规网页工作交给 Qoder，接口由 Codex 独立验收。',
+        revision: 2,
+        compacted: 14,
+      },
+    },
     server_time: now,
   };
 }

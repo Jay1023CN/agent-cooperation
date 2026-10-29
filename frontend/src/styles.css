@@ -1335,6 +1335,147 @@ kbd {
   stroke-width: 2.2;
 }
 
+/* The channel is a desk with a coloured edge: ink for the team, dashed amber for a private talk. */
+.chat-panel {
+  position: relative;
+  box-shadow: inset 0 4px 0 var(--accent);
+}
+.chat-panel[data-channel='personal'] {
+  border-style: dashed;
+  box-shadow: inset 0 4px 0 var(--s-running);
+}
+.chat-heading {
+  padding-top: calc(var(--space-3) + 4px);
+}
+.chat-heading .segmented button.active {
+  background: var(--accent);
+  color: var(--accent-on);
+}
+.chat-panel[data-channel='personal'] .chat-heading .segmented button.active {
+  background: var(--s-running);
+  color: light-dark(#ffffff, #1b1405);
+}
+/* A leader's reply reads as a dispatch note: tinted, ruled in ink. People speak plainly. */
+.message.agent .message-body {
+  padding: var(--space-3) var(--space-4);
+  border-radius: 0 var(--radius) var(--radius) var(--radius);
+  background: color-mix(in oklab, var(--accent) 6%, var(--surface));
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.message.agent .message-text {
+  max-width: 68ch;
+}
+.message-role {
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--accent-bg);
+}
+.summary-fold {
+  margin-bottom: var(--space-5);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-subtle);
+}
+.summary-fold summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  list-style: none;
+}
+.summary-fold summary::-webkit-details-marker {
+  display: none;
+}
+.summary-fold summary > span:last-child {
+  display: grid;
+  min-width: 0;
+}
+.summary-fold strong {
+  font-size: var(--text-sm);
+}
+.summary-fold small {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+/* Stacked pages: older messages folded under one sheet. */
+.summary-mark {
+  position: relative;
+  flex: none;
+  width: 22px;
+  height: 26px;
+  border: 1.5px solid var(--muted);
+  border-radius: 3px;
+  background: var(--surface);
+  box-shadow:
+    3px -3px 0 -1.5px var(--surface-subtle),
+    3px -3px 0 0 var(--faint);
+}
+.summary-mark::after {
+  position: absolute;
+  inset: 6px 4px auto;
+  height: 9px;
+  border-top: 1.5px solid var(--faint);
+  border-bottom: 1.5px solid var(--faint);
+  content: '';
+}
+.summary-fold summary::after {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 650;
+  content: '展开';
+}
+.summary-fold[open] summary::after {
+  content: '收起';
+}
+.summary-fold p {
+  margin: 0 var(--space-4) var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+  color: var(--text);
+  font-size: var(--text-sm);
+  line-height: 1.8;
+  white-space: pre-wrap;
+}
+/* Task links in a reply are small dispatch tickets, same stub as the board. */
+.inline-task {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding: 0 var(--space-3) 0 0;
+  min-height: 38px;
+  overflow: hidden;
+  background: var(--surface);
+  box-shadow: none;
+}
+.inline-stub {
+  align-self: stretch;
+  display: grid;
+  place-items: center;
+  padding: 0 10px;
+  border-right: 1.5px dashed color-mix(in oklab, var(--state, var(--s-queued)) 45%, var(--surface));
+  background: color-mix(in oklab, var(--state, var(--s-queued)) 16%, var(--surface));
+  color: color-mix(in oklab, var(--state, var(--s-queued)) 80%, var(--text));
+  font-size: 11px;
+  font-weight: 750;
+  font-stretch: 75%;
+  letter-spacing: 0.1em;
+}
+.composer {
+  border-width: 1.5px;
+}
+.send-button {
+  width: 36px;
+  height: 36px;
+  transition: transform 0.12s;
+}
+.send-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+.chat-panel[data-channel='personal'] .send-button {
+  background: var(--s-running);
+  color: light-dark(#ffffff, #1b1405);
+}
+
 /* ---------- Context panel ---------- */
 .context-panel {
   display: grid;
@@ -1861,25 +2002,146 @@ kbd {
 }
 
 /* ---------- Files ---------- */
-.file-list {
+/* Storage gauge: one big figure, one bar split into kept / cleanable / everything else. */
+.storage-gauge {
+  --gauge: var(--accent);
+  display: grid;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+  padding: var(--space-5) var(--space-5) var(--space-4);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
+}
+.storage-gauge.near {
+  --gauge: var(--s-running);
+}
+.storage-gauge.full {
+  --gauge: var(--s-blocked);
+  border-color: color-mix(in oklab, var(--s-blocked) 45%, var(--border));
+}
+.storage-figure {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+.storage-figure strong {
+  font-size: 48px;
+  font-weight: 800;
+  font-stretch: 62%;
+  letter-spacing: -0.03em;
+  line-height: 0.9;
+}
+.storage-figure span {
+  color: var(--muted);
+  font-size: var(--text-md);
+  font-weight: 650;
+  font-stretch: 80%;
+}
+.storage-figure em {
+  margin-left: auto;
+  color: var(--gauge);
+  font-size: 28px;
+  font-style: normal;
+  font-weight: 800;
+  font-stretch: 62%;
+}
+.storage-bar {
+  display: flex;
+  gap: 2px;
+  height: 14px;
   overflow: hidden;
+  border-radius: 4px;
+  background: var(--surface-hover);
+}
+.storage-bar span {
+  min-width: 0;
+  height: 100%;
+}
+.storage-bar .kept,
+.storage-legend .kept::before {
+  background: var(--gauge);
+}
+.storage-bar .loose,
+.storage-legend .loose::before {
+  background: repeating-linear-gradient(
+    -45deg,
+    color-mix(in oklab, var(--gauge) 55%, var(--surface)) 0 4px,
+    color-mix(in oklab, var(--gauge) 28%, var(--surface)) 4px 8px
+  );
+}
+.storage-bar .other,
+.storage-legend .other::before {
+  background: var(--border-strong);
+}
+.storage-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-5);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+.storage-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.storage-legend span::before {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  content: '';
+}
+.storage-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+.storage-foot p {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.storage-gauge.full .storage-foot p {
+  color: var(--danger);
+  font-weight: 650;
+}
+.file-list {
+  display: grid;
+  gap: var(--space-2);
 }
 .file-row {
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) auto;
+  grid-template-columns: 58px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: var(--space-3);
-  padding: 10px var(--space-4);
-  border-bottom: 1px solid var(--border);
+  min-height: 56px;
+  padding-right: var(--space-3);
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--border);
 }
-.file-row:last-child {
-  border-bottom: 0;
-}
-.file-row > span svg {
+.file-stub {
+  align-self: stretch;
+  display: grid;
+  place-items: center;
+  border-right: 1.5px dashed var(--border-strong);
+  background: var(--surface-subtle);
   color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  font-stretch: 72%;
+  letter-spacing: 0.08em;
+}
+.file-row.pinned .file-stub {
+  border-right-color: color-mix(in oklab, var(--accent) 40%, var(--surface));
+  background: var(--accent-bg);
+  color: var(--accent);
 }
 .file-row-main {
   display: grid;
@@ -1892,22 +2154,49 @@ kbd {
   white-space: nowrap;
 }
 .file-row-main small {
+  overflow: hidden;
   color: var(--muted);
   font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-kept,
+.file-loose {
+  font-size: var(--text-xs);
+  font-weight: 650;
+  white-space: nowrap;
+}
+.file-kept {
+  color: var(--accent);
+}
+.file-loose {
+  color: var(--faint);
 }
 .file-row-actions {
   display: flex;
   gap: 2px;
 }
-.file-storage {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  margin-top: var(--space-3);
-  color: var(--muted);
-  font-size: var(--text-sm);
+.storage-meter.near-full,
+.storage-meter.near-full span:last-child {
+  color: var(--danger);
+}
+.storage-meter.near-full .progress-track span {
+  background: var(--danger);
+}
+@media (max-width: 560px) {
+  .file-row {
+    grid-template-columns: 52px minmax(0, 1fr) auto;
+  }
+  .file-kept,
+  .file-loose {
+    display: none;
+  }
+  .storage-gauge {
+    padding: var(--space-4);
+  }
+  .storage-figure strong {
+    font-size: 38px;
+  }
 }
 
 /* ---------- Machines & agents ---------- */
@@ -2341,51 +2630,166 @@ kbd {
 }
 
 /* ---------- Memory ---------- */
+/* Memories are index cards: the stub names the kind, its tint says whether members use it. */
 .memory-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-3);
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+.memory-tally {
+  display: flex;
+  gap: var(--space-4);
+  margin-left: auto;
+}
+.memory-tally span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 650;
+}
+.memory-tally strong {
+  color: var(--state);
+  font-size: 30px;
+  font-weight: 800;
+  font-stretch: 62%;
+  line-height: 1;
+}
+.memory-tally .zero strong {
+  color: var(--border-strong);
+}
+.memory-group,
+.memory-inbox {
+  margin-bottom: var(--space-6);
+}
+.memory-inbox {
+  padding: var(--space-4);
+  border-radius: var(--radius);
+  background: color-mix(in oklab, var(--s-review) 8%, var(--bg));
+  box-shadow: inset 0 4px 0 var(--s-review);
+}
+.memory-group-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.memory-group-title h3 {
+  font-size: var(--text-md);
+  font-weight: 750;
+}
+.memory-group-title span {
+  color: var(--muted);
+  font-size: var(--text-xs);
 }
 .memory-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: var(--space-3);
 }
 .memory-card {
   display: grid;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  grid-template-columns: 30px minmax(0, 1fr);
+  overflow: hidden;
+  border-radius: var(--radius-sm);
   background: var(--surface);
+  box-shadow: 0 0 0 1px var(--border);
 }
-.memory-card.disabled {
+.memory-card.disabled .memory-main {
   opacity: 0.6;
+}
+.memory-stub {
+  display: grid;
+  place-items: center;
+  border-right: 1.5px dashed color-mix(in oklab, var(--state) 45%, var(--surface));
+  background: color-mix(in oklab, var(--state) 16%, var(--surface));
+}
+.memory-stub span {
+  color: color-mix(in oklab, var(--state) 80%, var(--text));
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.2em;
+  writing-mode: vertical-rl;
+}
+.memory-main {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
 }
 .memory-card-top {
   display: flex;
   align-items: center;
   gap: 6px;
 }
-.memory-card-top .muted {
+.memory-revision {
   margin-left: auto;
+  color: var(--faint);
+  font-size: var(--text-xs);
 }
 .memory-card p {
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
   line-height: 1.7;
+  overflow-wrap: anywhere;
 }
 .memory-card-footer {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-2);
+  gap: var(--space-2) var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
   color: var(--muted);
   font-size: var(--text-xs);
 }
-.memory-card-footer div {
+.memory-card-footer > span {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px var(--space-3);
+  min-width: 0;
+}
+.memory-card-footer > div {
   display: flex;
+  align-items: center;
   gap: var(--space-3);
+}
+.memory-source {
+  max-width: 34ch;
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+button.memory-source {
+  color: var(--accent);
+}
+button.memory-source:hover {
+  text-decoration: underline;
+}
+.memory-source.quiet {
+  color: var(--faint);
+}
+.memory-card-footer time {
+  color: var(--faint);
+}
+.danger-link:hover {
+  color: var(--danger);
+}
+@media (max-width: 560px) {
+  .memory-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .memory-tally {
+    margin-left: 0;
+  }
 }
 
 /* ---------- Logs ---------- */

@@ -75,7 +75,32 @@ export function renderReviews(state) {
                   '',
                 )}</ul><button class="button small" data-action="task" data-id="${e(task.id)}">查看证据</button></article>`,
           )
-          .join('')}</div>`);
+          .join('')}</div>`) +
+    `<div class="file-storage"><span>中心 ${size(storage.used)} / ${size(storage.quota)} · ${e(centerReason)}${storage.disk_free_bytes != null ? ` · 磁盘剩余 ${size(storage.disk_free_bytes)}` : ''}</span></div>${machines ? `<div class="file-list">${machines}</div>` : ''}`;
+}
+
+const previewable = /\.(txt|md|json|csv|py|js|ts|css|html?|svg|log|png|jpe?g|gif|webp|avif|bmp)$/i;
+const extensionOf = (name) => (/\.([a-z0-9]{1,6})$/i.exec(name)?.[1] || '文件').toUpperCase();
+
+/** Storage as one gauge: what is kept, what cleanup can free, and what else the center holds. */
+function storageGauge(state) {
+  const used = state.storage?.used || 0,
+    quota = state.storage?.quota || 5e9;
+  const sum = (files) => files.reduce((total, file) => total + (file.size || 0), 0);
+  const kept = sum(state.artifacts.filter((file) => file.pinned)),
+    loose = sum(state.artifacts.filter((file) => !file.pinned)),
+    other = Math.max(0, used - kept - loose);
+  const percent = Math.min(100, (used / quota) * 100);
+  const level = state.storage?.state === 'blocked' || percent >= 95 ? 'full' : percent >= 85 ? 'near' : '';
+  const width = (value) => `${Math.min(100, (value / quota) * 100).toFixed(2)}%`;
+  const note = {
+    full: '中心暂存已满，新成果会传不上来。先清理未保留的旧文件，或把大文件挪走。',
+    near: '空间紧张，可以检查旧文件和执行电脑工作区。',
+    '': loose
+      ? `未保留文件共 ${size(loose)}；清理时会保留最近成果和活动任务。`
+      : '当前项目没有未保留的成果。',
+  }[level];
+  return `<section class="storage-gauge ${level}"><div class="storage-figure"><strong>${size(used)}</strong><span>/ ${size(quota)}</span><em>${percent.toFixed(0)}%</em></div><div class="storage-bar" role="img" aria-label="中心暂存已用 ${percent.toFixed(0)}%"><span class="kept" style="width:${width(kept)}"></span><span class="loose" style="width:${width(loose)}"></span><span class="other" style="width:${width(other)}"></span></div><div class="storage-legend"><span class="kept">已保留 ${size(kept)}</span><span class="loose">未保留 ${size(loose)}</span>${other ? `<span class="other">其他项目和记录 ${size(other)}</span>` : ''}</div><div class="storage-foot"><p>${note}</p><button class="button small ${level ? 'primary' : ''}" data-action="cleanup" ${loose ? '' : 'disabled'}>清理未保留的旧文件</button></div></section>`;
 }
 
 export function renderFiles(state) {
@@ -107,11 +132,16 @@ export function renderFiles(state) {
     })
     .join('');
   $('#view-files').innerHTML =
-    `<div class="view-heading"><div><h2>成果</h2><p>代码走 GitHub 分支；文档、模型和演示文件暂存在中心。</p></div><button class="button" data-action="upload">${icon('upload')}上传文件</button></div>` +
+    `<div class="view-heading"><div><h2>成果</h2><p>代码走 GitHub 分支；文档、模型和演示文件暂存在中心。保留的文件不会被清理。</p></div><button class="button primary" data-action="upload">${icon('upload')}上传文件</button></div>${storageGauge(state)}` +
     (!files.length
       ? emptyState('还没有成果文件', '成员把文件放进任务的 arena-exports/ 后会自动出现，也可以手动上传。')
-      : `<div class="file-list">${files.map((file) => `<div class="file-row"><span>${icon(file.name.endsWith('.blend') ? 'cube' : 'file')}</span><div class="file-row-main"><strong>${e(file.name)}</strong><small>${size(file.size)} · ${dateLabel(file.created)}${file.pinned ? ' · 已保留' : ''}</small></div><div class="file-row-actions">${/\.(txt|md|json|csv|py|js|ts|css|html?|svg|log|png|jpe?g|gif|webp|avif|bmp)$/i.test(file.name) ? `<button class="icon-button" data-action="preview-file" data-id="${e(file.id)}" title="预览" aria-label="预览 ${e(file.name)}">${icon('file')}</button>` : ''}<button class="icon-button ${file.pinned ? 'pinned' : ''}" data-action="pin-file" data-id="${e(file.id)}" title="${file.pinned ? '取消保留' : '保留'}" aria-label="${file.pinned ? '取消保留' : '保留'} ${e(file.name)}">${icon('pin')}</button><button class="icon-button" data-action="download-file" data-id="${e(file.id)}" title="下载" aria-label="下载 ${e(file.name)}">${icon('download')}</button>${!file.pinned ? `<button class="icon-button" data-action="delete-file" data-id="${e(file.id)}" title="删除" aria-label="删除 ${e(file.name)}">${icon('trash')}</button>` : ''}</div></div>`).join('')}</div>`) +
-    `<div class="file-storage"><span>中心 ${size(storage.used)} / ${size(storage.quota)} · ${e(centerReason)}${storage.disk_free_bytes != null ? ` · 磁盘剩余 ${size(storage.disk_free_bytes)}` : ''}</span><button class="text-link" data-action="cleanup">清理未保留的旧文件</button></div>${machines ? `<div class="file-list">${machines}</div>` : ''}`;
+      : `<div class="file-list">${files
+          .map((file) => {
+            const task = state.tasks.find((item) => item.id === file.task_id);
+            return `<div class="file-row ${file.pinned ? 'pinned' : ''}"><span class="file-stub">${e(extensionOf(file.name))}</span><div class="file-row-main"><strong>${e(file.name)}</strong><small>${size(file.size)} · ${dateLabel(file.created)}${task ? ` · ${e(task.title)}` : ''}</small></div>${file.pinned ? '<span class="file-kept">已保留</span>' : '<span class="file-loose">未保留</span>'}<div class="file-row-actions">${previewable.test(file.name) ? `<button class="icon-button" data-action="preview-file" data-id="${e(file.id)}" title="预览" aria-label="预览 ${e(file.name)}">${icon('file')}</button>` : ''}<button class="icon-button ${file.pinned ? 'pinned' : ''}" data-action="pin-file" data-id="${e(file.id)}" title="${file.pinned ? '取消保留' : '保留'}" aria-label="${file.pinned ? '取消保留' : '保留'} ${e(file.name)}">${icon('pin')}</button><button class="icon-button" data-action="download-file" data-id="${e(file.id)}" title="下载" aria-label="下载 ${e(file.name)}">${icon('download')}</button>${!file.pinned ? `<button class="icon-button" data-action="delete-file" data-id="${e(file.id)}" title="删除" aria-label="删除 ${e(file.name)}">${icon('trash')}</button>` : ''}</div></div>`;
+          })
+          .join('')}</div>`) +
+    `<div class="file-storage"><span>中心 ${size(storage.used)} / ${size(storage.quota)} · ${e(centerReason)}${storage.disk_free_bytes != null ? ` · 磁盘剩余 ${size(storage.disk_free_bytes)}` : ''}</span></div>${machines ? `<div class="file-list">${machines}</div>` : ''}`;
 }
 
 export function renderLogs(state) {

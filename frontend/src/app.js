@@ -237,6 +237,7 @@ function render() {
   const used = state.storage?.used || 0,
     quota = state.storage?.quota || 5e9,
     percent = Math.min(100, (used / quota) * 100);
+  $('#sidebar-storage').classList.toggle('near-full', percent >= 85);
   $('#sidebar-storage').innerHTML =
     `<span>暂存</span><div class="progress-track"><span style="width:${percent.toFixed(1)}%"></span></div><span>${percent.toFixed(0)}%</span>`;
   $('#sidebar-storage').title = `中心暂存 ${size(used)} / ${size(quota)}`;
@@ -250,7 +251,7 @@ function render() {
   renderReviews(state);
   renderFiles(state);
   renderLogs(state);
-  renderMemories(memories, memoryScope, conversationSummary);
+  renderMemories(memories, memoryScope, conversationSummary, state.tasks);
   renderOverview(state, project());
   refreshTaskDialog();
   $('#message-input').disabled = !p || demo;
@@ -262,6 +263,7 @@ function render() {
         ? '先和负责人私下理清想法…'
         : '说说要做什么，或者告诉负责人下一步…'
       : '先新建一个项目';
+  $('#view-chat').dataset.channel = channel;
   $('#channel-note').hidden = channel !== 'personal';
   $('#channel-note').textContent = '私聊只有你能看到，不会改动共享需求。想让团队动手，把结论发到团队频道。';
   $('#channel-scope').textContent = channel === 'personal' ? '只有你能看到' : '你和伙伴都能看到';
@@ -282,22 +284,32 @@ function render() {
   );
   hydrateIcons();
 }
+/** The compacted part of this channel, once the server has folded older messages into a summary. */
+function channelSummary() {
+  const key = channel === 'personal' ? 'personal' : 'shared';
+  const value = state.conversation_summaries?.[key];
+  if (!value) return null;
+  const item = typeof value === 'string' ? { summary: value } : value;
+  return item.summary ? item : null;
+}
 function renderMessages() {
   const list = $('#message-list');
   const visible =
     channel === 'personal'
       ? state.messages.filter((message) => message.channel !== 'shared')
       : state.messages.filter((message) => message.channel === 'shared');
+  const summary = channelSummary();
   const signature = JSON.stringify([
     currentProject,
     channel,
+    summary,
     visible.map((item) => [item.id, item.content]),
     state.tasks.slice(0, 3).map((item) => [item.id, item.status]),
   ]);
   if (signature === messageSignature) return;
   messageSignature = signature;
   const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 70;
-  if (!visible.length) {
+  if (!visible.length && !summary) {
     list.innerHTML = project()
       ? emptyState(
           channel === 'personal' ? '私下先聊聊' : '从目标开始',
@@ -314,6 +326,9 @@ function renderMessages() {
     return;
   }
   list.innerHTML =
+    (summary
+      ? `<details class="summary-fold"><summary><span class="summary-mark" aria-hidden="true"></span><span><strong>更早的对话已整理成摘要</strong><small>${summary.compacted ? `收起了 ${e(summary.compacted)} 条消息 · ` : ''}负责人回复时会参考它${summary.revision ? ` · 第 ${e(summary.revision)} 版` : ''}</small></span></summary><p>${e(summary.summary)}</p></details>`
+      : '') +
     `<div class="date-line">${channel === 'personal' ? '私聊' : '团队频道'}</div>` +
     visible
       .map((message, index) => {
@@ -323,7 +338,7 @@ function renderMessages() {
           demo && channel === 'shared' && index === visible.length - 1
             ? state.tasks.filter((task) => task.kind === 'worker').slice(0, 3)
             : [];
-        return `<article class="message ${isAgent ? 'agent' : ''}"><span class="message-avatar">${isAgent ? icon('spark') : e(message.author.slice(0, 1).toUpperCase())}</span><div class="message-body"><div class="message-meta"><strong>${e(message.author)}</strong>${isAgent ? '<span class="message-role">AI 成员</span>' : ''}<time>${timeLabel(message.created)}</time></div><div class="message-text">${e(message.content)}</div>${taskLinks.length ? `<div class="message-task-links">${taskLinks.map((task) => `<button class="inline-task status-${e(task.status)}" data-action="task" data-id="${e(task.id)}"><span>${icon(task.capability === 'blender' ? 'cube' : 'branch')}</span><span>${e(task.title)}</span>${status(task.status)}</button>`).join('')}</div>` : ''}${channel === 'personal' ? `<button class="text-link" style="margin-top:6px" data-action="share-message" data-id="${e(message.id)}">放到团队频道输入框</button>` : ''}</div></article>`;
+        return `<article class="message ${isAgent ? 'agent' : ''}"><span class="message-avatar">${isAgent ? icon('spark') : e(message.author.slice(0, 1).toUpperCase())}</span><div class="message-body"><div class="message-meta"><strong>${e(message.author)}</strong>${isAgent ? '<span class="message-role">AI 成员</span>' : ''}<time>${timeLabel(message.created)}</time></div><div class="message-text">${e(message.content)}</div>${taskLinks.length ? `<div class="message-task-links">${taskLinks.map((task) => `<button class="inline-task status-${e(task.status)}" data-action="task" data-id="${e(task.id)}"><span class="inline-stub">${e(task.id.slice(0, 7).toUpperCase())}</span><span>${e(task.title)}</span>${status(task.status)}</button>`).join('')}</div>` : ''}${channel === 'personal' ? `<button class="text-link" style="margin-top:6px" data-action="share-message" data-id="${e(message.id)}">放到团队频道输入框</button>` : ''}</div></article>`;
       })
       .join('');
   if (nearBottom || visible.length <= 3) list.scrollTop = list.scrollHeight;
@@ -463,7 +478,7 @@ async function loadMemories(showError = false) {
   if (!project()) {
     memories = [];
     conversationSummary = null;
-    renderMemories(memories, memoryScope, conversationSummary);
+    renderMemories(memories, memoryScope, conversationSummary, state.tasks);
     return;
   }
   const id = currentProject,
@@ -484,6 +499,17 @@ async function loadMemories(showError = false) {
               updated: Date.now() / 1000,
             },
             {
+              id: 'demo-memory3',
+              scope: 'project',
+              category: 'decision',
+              content: '路线数据统一用 GeoJSON，收藏接口返回分页结果，前端不再自行拼装。',
+              status: 'active',
+              revision: 2,
+              source_task: 't-api001',
+              created: Date.now() / 1000 - 7200,
+              updated: Date.now() / 1000 - 3600,
+            },
+            {
               id: 'demo-memory2',
               scope: 'project',
               category: 'preference',
@@ -496,7 +522,7 @@ async function loadMemories(showError = false) {
           ]
         : [];
     conversationSummary = null;
-    renderMemories(memories, memoryScope, conversationSummary);
+    renderMemories(memories, memoryScope, conversationSummary, state.tasks);
     return;
   }
   try {
@@ -509,7 +535,7 @@ async function loadMemories(showError = false) {
     if (serial !== memoryLoadSerial || id !== currentProject || scope !== memoryScope) return;
     memories = result.memories || [];
     conversationSummary = summary;
-    renderMemories(memories, memoryScope, conversationSummary);
+    renderMemories(memories, memoryScope, conversationSummary, state.tasks);
   } catch (error) {
     if (showError) throw error;
   }
@@ -1218,7 +1244,7 @@ document.addEventListener('click', async (event) => {
       memoryScope = button.dataset.scope;
       memories = [];
       conversationSummary = null;
-      renderMemories(memories, memoryScope, conversationSummary);
+      renderMemories(memories, memoryScope, conversationSummary, state.tasks);
       await loadMemories(true);
     } else if (action === 'memory-status' && editable()) {
       const item = memories.find((value) => value.id === button.dataset.id);
