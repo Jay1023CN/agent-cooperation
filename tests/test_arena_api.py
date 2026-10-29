@@ -875,6 +875,20 @@ def test_database_page_limit_prevents_unbounded_growth(arena):
     assert store.one("SELECT COUNT(*) AS n FROM large_records")["n"] == 0
 
 
+def test_full_database_error_without_sqlite_errorcode_is_reported(arena):
+    import sqlite3
+
+    from arena.store import StorageFull
+
+    _, store = arena
+    with pytest.raises(StorageFull):
+        with store.tx():
+            raise sqlite3.OperationalError("database or disk is full")
+    with pytest.raises(sqlite3.OperationalError, match="other error"):
+        with store.tx():
+            raise sqlite3.OperationalError("other error")
+
+
 def test_long_new_messages_are_compressed_without_losing_search_or_full_text(arena):
     client, store = arena
     p = project(client)

@@ -166,7 +166,8 @@ class Store:
                 self.db.commit()
             except sqlite3.OperationalError as exc:
                 self.db.rollback()
-                if getattr(exc, "sqlite_errorcode", None) == sqlite3.SQLITE_FULL:
+                # Python 3.10 does not expose sqlite_errorcode or SQLITE_FULL.
+                if getattr(exc, "sqlite_errorcode", None) == 13 or str(exc) == "database or disk is full":
                     raise StorageFull("中心存储已达到上限，请清理未保留的成果或提高存储额度") from exc
                 raise
             except BaseException:
