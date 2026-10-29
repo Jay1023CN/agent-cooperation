@@ -4,13 +4,18 @@
 
 ## v1.11.2 (2026-10-29)
 
-### Bug Fixes
+### 修复
+
+- **桌面交接**：会话预检失败后可以重试通知；宿主补充消息确认后才能提交结果。
+  ([`e30cc6e`](https://github.com/Jay1023CN/agent-cooperation/commit/e30cc6e38ead4e295d33bc278e801d4039a1a264))
 
 - **release**: 发布时同步运行版本号
   ([`c535102`](https://github.com/Jay1023CN/agent-cooperation/commit/c535102eaaa28c2acd28c142e7cf649489393357))
 
 
 ## v1.11.1 (2026-10-29)
+
+此版本发布流程未完成，已标为预发布；请使用 v1.11.2。
 
 ### Bug Fixes
 
