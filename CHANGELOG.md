@@ -2,6 +2,24 @@
 
 <!-- version list -->
 
+## v1.11.1 (2026-10-29)
+
+### Bug Fixes
+
+- **handoff**: 修复通知重试与补充消息确认
+  ([`e30cc6e`](https://github.com/Jay1023CN/agent-cooperation/commit/e30cc6e38ead4e295d33bc278e801d4039a1a264))
+
+### Chores
+
+- Sync version to config.py [skip ci]
+  ([`606a31a`](https://github.com/Jay1023CN/agent-cooperation/commit/606a31af8b6abf2a1067305cc30f3f40558da646))
+
+### Documentation
+
+- 更新 v1.11.0 下载与桌面协作验证记录 [skip ci]
+  ([`53cd542`](https://github.com/Jay1023CN/agent-cooperation/commit/53cd542ba97ca061fa94ed3930f066aea26944dd))
+
+
 ## v1.11.0 (2026-10-29)
 
 ### Bug Fixes
