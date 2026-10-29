@@ -2,6 +2,24 @@
 
 <!-- version list -->
 
+## v1.12.0 (2026-10-29)
+
+### Documentation
+
+- 更新 v1.11.2 下载与交接说明 [skip ci]
+  ([`81d3b5f`](https://github.com/Jay1023CN/agent-cooperation/commit/81d3b5f3fd9eefa14b3e43c05bee9316b97ec4cc))
+
+### Features
+
+- **ui**: 任务看板改为调度车道与派工单
+  ([`3467414`](https://github.com/Jay1023CN/agent-cooperation/commit/346741446e1396448559f39661a08d114ddd3b5c))
+
+### Testing
+
+- **ui**: 验证任务看板并更新网页构建
+  ([`569915f`](https://github.com/Jay1023CN/agent-cooperation/commit/569915f4df70746992031e0aaa08df15e52ee3bc))
+
+
 ## v1.11.2 (2026-10-29)
 
 ### 修复
