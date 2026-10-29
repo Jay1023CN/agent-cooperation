@@ -49,18 +49,6 @@ jobs:
           semantic-release version
           semantic-release publish
           
-      - name: Sync version to config.py
-        run: |
-          pip install toml
-          python scripts/sync_version.py
-          if git diff --quiet config.py; then
-            echo "No version changes in config.py"
-          else
-            git add config.py
-            git commit -m "chore: sync version to config.py [skip ci]"
-            git push
-          fi
-
       - name: Upload build artifacts to release
         if: hashFiles('dist/*') != ''
         run: |

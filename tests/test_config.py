@@ -2,6 +2,9 @@
 Tests for configuration
 """
 
+import re
+from pathlib import Path
+
 from config import (
     DEFAULT_MODEL,
     TEMPERATURE_ANALYTICAL,
@@ -27,6 +30,11 @@ class TestConfig:
 
         # Check updated date exists (don't assert on specific format/value)
         assert isinstance(__updated__, str)
+
+    def test_package_version_matches_runtime_version(self):
+        pyproject = (Path(__file__).resolve().parent.parent / "pyproject.toml").read_text(encoding="utf-8")
+        version = re.search(r'^version\s*=\s*"([^"]+)"', pyproject, re.MULTILINE)
+        assert version and version.group(1) == __version__
 
     def test_model_config(self):
         """Test model configuration"""

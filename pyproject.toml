@@ -118,6 +118,7 @@ ignore = [
 
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]
+version_variables = ["config.py:__version__"]
 branch = "main"
 version_source = "tag"
 version_pattern = "v(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
