@@ -2,6 +2,24 @@
 
 <!-- version list -->
 
+## v1.17.0 (2026-10-29)
+
+### Bug Fixes
+
+- 兼容 Python 3.10 存储满错误
+  ([`c2dfea3`](https://github.com/Jay1023CN/agent-cooperation/commit/c2dfea384e8032f7e668aa74f2f6b23cd0e4f109))
+
+### Documentation
+
+- 更新自动记忆与 v1.16.1 下载说明 [skip ci]
+  ([`b3dc725`](https://github.com/Jay1023CN/agent-cooperation/commit/b3dc72584906ccd230d2881ef6eabd78619dd25a))
+
+### Features
+
+- 自动压缩长对话并限制中心存储
+  ([`0529bd4`](https://github.com/Jay1023CN/agent-cooperation/commit/0529bd427b661289b76a4a612f3471e9eaf0a4a6))
+
+
 ## v1.16.1 (2026-10-29)
 
 ### 修复
