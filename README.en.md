@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Jay1023CN/agent-cooperation/releases/tag/v1.9.0">Download v1.9.0</a> ·
+  <a href="https://github.com/Jay1023CN/agent-cooperation/releases/tag/v1.10.1">Download v1.10.1</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#how-it-works">Workflow</a> ·
   <a href="#supported-clients">Clients</a> ·
@@ -30,7 +30,7 @@ Claude Code, Codex and Qoder can each do the work. Splitting tasks, carrying con
 
 Run your own hub and connect computers through Tailscale, without a public IP. Workers use local clients and their existing sign-in state. Harnesses such as DSH retain their own model, provider and credential configuration.
 
-> **Current release: v1.9.0, early stage.** Windows and Mac packages are published and pass CI startup checks. A complete run across several real machines with real subscriptions is still pending. See [verification status](#what-works-today).
+> **Current release: v1.10.1, early stage.** Windows and Mac packages are published and pass CI startup checks. A complete run across several real machines with real subscriptions is still pending. See [verification status](#what-works-today).
 
 <table>
   <tr>
@@ -49,11 +49,14 @@ Run your own hub and connect computers through Tailscale, without a public IP. W
 
 ## Recent updates
 
+- **Computer setup (v1.10.1):** commands follow the chosen OS and installation. Native packages no longer use Python commands. Client-specific fields, member cards and the command panel work across narrow screens and both themes.
+- **Continuous handoff (v1.10.0):** targeted claims, progress, two-way messages and submit-and-wait. Optional notifications to existing Claude inboxes are disabled by default; a claim receipt is still required. See [desktop handoff](docs/desktop-handoff.md).
+
 - **DSH harness support (v1.9.0):** ACP task sessions with custom profiles, model selection, permission requests and cancellation. Leaving the model blank uses the DSH profile; Agent Cooperation does not inject a DeepSeek official model configuration. See [DSH setup](docs/dsh-harness.md).
 - **Task history:** execution and independent-review logs in task details, with paginated history and a refresh prompt when new records arrive.
 - **Native delivery:** Windows x64, macOS ARM64 and a Mac setup helper are available. GitHub builds the packages, checks startup and hashes, and uploads release assets directly.
 
-[v1.9.0 release notes](https://github.com/Jay1023CN/agent-cooperation/releases/tag/v1.9.0) · [Full changelog](CHANGELOG.md)
+[v1.10.1 release notes](https://github.com/Jay1023CN/agent-cooperation/releases/tag/v1.10.1) · [Full changelog](CHANGELOG.md)
 
 ## Quick start
 
@@ -61,11 +64,11 @@ Run your own hub and connect computers through Tailscale, without a public IP. W
 
 Use an always-on computer for the hub and connect other computers as workers. Native packages include Python and the compiled UI; running them needs no separate Python or Node.js installation. Code tasks need Git, and each worker needs its chosen clients installed and configured.
 
-| Computer / purpose | v1.9.0 download |
+| Computer / purpose | v1.10.1 download |
 | --- | --- |
-| First-time setup on an Apple Silicon Mac mini | [Mac setup helper](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.9.0/Mac-mini-Setup-v1.9.0.zip) |
-| Apple Silicon Mac, manual hub or worker setup | [macOS ARM64 package](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.9.0/pal-arena-darwin-arm64-a1a8f6c9beb7.tar.gz) · [SHA-256](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.9.0/pal-arena-darwin-arm64-a1a8f6c9beb7.tar.gz.sha256) |
-| Intel / AMD Windows PC | [Windows x64 package](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.9.0/pal-arena-windows-amd64-a1a8f6c9beb7.zip) · [SHA-256](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.9.0/pal-arena-windows-amd64-a1a8f6c9beb7.zip.sha256) |
+| First-time setup on an Apple Silicon Mac mini | [Mac setup helper](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.10.1/Mac-mini-Setup-v1.10.1.zip) |
+| Apple Silicon Mac, manual hub or worker setup | [macOS ARM64 package](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.10.1/pal-arena-darwin-arm64-ac0e74646ad5.tar.gz) · [SHA-256](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.10.1/pal-arena-darwin-arm64-ac0e74646ad5.tar.gz.sha256) |
+| Intel / AMD Windows PC | [Windows x64 package](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.10.1/pal-arena-windows-amd64-ac0e74646ad5.zip) · [SHA-256](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.10.1/pal-arena-windows-amd64-ac0e74646ad5.zip.sha256) |
 
 The Mac helper downloads and verifies the pinned package, then sets up the hub to start when the current user signs in. For manual setup, follow the [verification and extraction guide](docs/arena-delivery.md#校验和解压), keep the whole extracted directory, and run `Start Server.command` on Mac or `Start Server.cmd` on Windows from its outermost folder.
 
@@ -212,9 +215,9 @@ Verification for this release:
 
 | Check | Result and evidence |
 | --- | --- |
-| Full GitHub test suite | [1,423 passed, 5 skipped](https://github.com/Jay1023CN/agent-cooperation/actions/runs/40716957854) |
-| Cross-platform contracts | [Windows / Linux / macOS × Python 3.10 / 3.12: all six passed](https://github.com/Jay1023CN/agent-cooperation/actions/runs/40716957810) |
-| Native builds and startup | [Both platforms passed; assets verified and published](https://github.com/Jay1023CN/agent-cooperation/actions/runs/40717454716) |
+| Full GitHub test suite | [1,449 passed, 6 skipped](https://github.com/Jay1023CN/agent-cooperation/actions/runs/40801888161) |
+| Cross-platform contracts | [Windows / Linux / macOS × Python 3.10 / 3.12: all six passed](https://github.com/Jay1023CN/agent-cooperation/actions/runs/40801888210) |
+| Native builds and startup | [Both platforms passed; assets verified and published](https://github.com/Jay1023CN/agent-cooperation/actions/runs/40802115554) |
 | Existing Claude desktop session | [Document claim and return verified](docs/claude-desktop-verification.md); automatic wake-up is not implemented |
 
 Automated tests use temporary Git repositories, fake CLIs and protocol fixtures without consuming real subscriptions. Real DSH model routes, the complete multi-machine subscription workflow, WorkBuddy desktop execution and the dedicated Blender adapter still need device testing.

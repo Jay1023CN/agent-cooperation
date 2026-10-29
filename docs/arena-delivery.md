@@ -1,6 +1,6 @@
 # PAL Arena 交付包与安装
 
-本页说明原生包、源码安装和升级方法。[v1.9.0 Release](https://github.com/Jay1023CN/agent-cooperation/releases/tag/v1.9.0) 已提供 Windows x64、macOS ARM64、Mac 安装助手及校验文件。[对应的原生构建](https://github.com/Jay1023CN/agent-cooperation/actions/runs/40717454716)已通过两端启动检查，并在 GitHub 上校验、上传附件。真实订阅客户端、多台电脑的完整任务链路及用户 Mac mini 上的安装仍需实机验证。
+本页说明原生包、源码安装和升级方法。[v1.10.1 Release](https://github.com/Jay1023CN/agent-cooperation/releases/tag/v1.10.1) 已提供 Windows x64、macOS ARM64、Mac 安装助手及校验文件。[对应的原生构建](https://github.com/Jay1023CN/agent-cooperation/actions/runs/40802115554)已通过两端启动检查，并在 GitHub 上校验、上传附件。真实订阅客户端、多台电脑的完整任务链路及用户 Mac mini 上的安装仍需实机验证。
 
 ## 选择正确的包
 
@@ -17,7 +17,7 @@
 
 ## 校验和解压
 
-从 [Release](https://github.com/Jay1023CN/agent-cooperation/releases/tag/v1.9.0) 下载本机版本的归档和同名 `.sha256` 文件。开发构建也可从对应 CI 的 Artifacts 下载；这种下载需要先解开 GitHub 外层 Artifact，得到平台归档和校验文件。
+从 [Release](https://github.com/Jay1023CN/agent-cooperation/releases/tag/v1.10.1) 下载本机版本的归档和同名 `.sha256` 文件。开发构建也可从对应 CI 的 Artifacts 下载；这种下载需要先解开 GitHub 外层 Artifact，得到平台归档和校验文件。
 
 Mac 在该下载目录中先校验，再解压。第二条命令里的文件名换成实际下载的名称：
 
@@ -59,7 +59,7 @@ pal-arena-平台-架构-提交号/
 
 ## 首次启动 Mac mini 中心
 
-Apple Silicon Mac mini 可使用 [v1.9.0 安装助手](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.9.0/Mac-mini-Setup-v1.9.0.zip)。解压后双击 `.command`：它下载并校验固定版本的原生包，安装到当前用户的 Applications 目录，创建登录自启服务，最后打开工作台。无需 Python 或 Node.js。[安装脚本](install-mac-mini.command)已通过 Bash 语法检查，中心二进制已通过对应 macOS 原生构建的启动和 MCP 检查；用户 Mac mini 上的安装仍需实际运行确认。
+Apple Silicon Mac mini 可使用 [v1.10.1 安装助手](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.10.1/Mac-mini-Setup-v1.10.1.zip)。解压后双击 `.command`：它下载并校验固定版本的原生包，安装到当前用户的 Applications 目录，创建登录自启服务，最后打开工作台。无需 Python 或 Node.js。[安装脚本](install-mac-mini.command)已通过 Bash 语法检查，中心二进制已通过对应 macOS 原生构建的启动和 MCP 检查；用户 Mac mini 上的安装仍需实际运行确认。
 
 安装助手遇到已有启动配置或占用中的 8765 端口会停止，不覆盖已有中心。数据库仍放在 `~/.pal-arena/server`。其他电脑访问前，需在 Mac mini 安装并登录 Tailscale，再从工作台开启共享。Intel Mac 不使用这个 ARM64 安装助手。
 
