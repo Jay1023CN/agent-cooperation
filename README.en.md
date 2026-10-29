@@ -208,7 +208,7 @@ The upstream PAL `clink` tool and [PAL Agent Link](docs/agent-link.md) are kept:
 - [x] Windows x64 / macOS ARM64 packages and a Mac helper, published directly from GitHub
 - [ ] End-to-end runs on several real machines with real subscriptions
 - [ ] WorkBuddy and Multica status write-back
-- [ ] Local notification and real code claims in an existing Claude session (optional adapter implemented)
+- [x] An existing Claude Desktop session received an MCP task, changed UI code and returned commits for independent Codex acceptance ([record](docs/desktop-handoff.md#真实桌面验证))
 - [ ] Dedicated Blender adapter and automatic checks that artifacts open
 
 Verification for this release:

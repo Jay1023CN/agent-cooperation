@@ -222,7 +222,7 @@ py -3 -m venv .venv
 - [x] Windows x64 / macOS ARM64 原生包与 Mac 安装助手，GitHub 直接发布附件
 - [ ] 多台实机、真实订阅下的端到端联调
 - [ ] WorkBuddy 与 Multica 的状态回写
-- [ ] 已有 Claude 会话的本机通知与真实代码领取验证（可选适配器已实现）
+- [x] 已有 Claude 桌面会话通过 MCP 真实领取、修改 UI、回传提交，再由 Codex 独立验收（[记录](docs/desktop-handoff.md#真实桌面验证)）
 - [ ] Blender 专用适配和可打开产物的自动检查
 
 本版验证记录：

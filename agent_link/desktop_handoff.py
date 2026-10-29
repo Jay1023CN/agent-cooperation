@@ -112,7 +112,7 @@ def build_server(
                 entry = (
                     ["internal-handoff-client"]
                     if getattr(sys, "frozen", False)
-                    else ["-B", "-m", "agent_link.handoff_client"]
+                    else ["-B", "-X", "utf8", "-m", "agent_link.handoff_client"]
                 )
                 client = [sys.executable, *entry, "--db", store.path]
                 content = (

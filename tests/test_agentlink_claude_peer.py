@@ -2,6 +2,8 @@ import hashlib
 import json
 import os
 import socket
+import subprocess
+import sys
 import tempfile
 import threading
 import uuid
@@ -179,6 +181,32 @@ async def test_client_calls_a_real_stdio_server_without_starting_a_model(tmp_pat
 
 def test_current_process_identity_is_available():
     assert claude_peer._process_start(os.getpid())
+
+
+def test_transport_client_preserves_utf8_on_legacy_windows_pipes(tmp_path):
+    db = tmp_path / "交接.sqlite"
+    store = HandoffStore(db)
+    store.create("unicode", "unicode", {"workspace": str(tmp_path), "prompt": "直接修改界面 🚀"})
+    env = {**os.environ, "PYTHONIOENCODING": "cp1252", "PYTHONUTF8": "0", "PYTHONDONTWRITEBYTECODE": "1"}
+
+    def client(tool, arguments):
+        response = subprocess.run(
+            [sys.executable, "-B", "-m", "agent_link.handoff_client", "--db", str(db), tool, "-"],
+            input=json.dumps(arguments, ensure_ascii=False).encode("utf-8"),
+            capture_output=True,
+            env=env,
+            timeout=15,
+        )
+        assert response.returncode == 0, response.stderr.decode("utf-8", errors="replace")
+        return json.loads(response.stdout.decode("utf-8"))
+
+    receipt = client("next_task", {"consumer_id": "ui", "request_id": "unicode", "wait_seconds": 0})
+    assert receipt["payload"]["prompt"] == "直接修改界面 🚀"
+    progress = client(
+        "report_progress",
+        {"lineage": "unicode", "handle": receipt["handle"], "message_id": "progress", "summary": "界面已完成 ✅"},
+    )
+    assert progress["text"] == "界面已完成 ✅"
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows named-pipe transport")

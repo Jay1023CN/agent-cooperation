@@ -287,7 +287,11 @@ export function renderAgents(state) {
       const roles = asArray(agent.roles)
         .map((role) => roleLabels[role] || role)
         .join(' / ');
-      return `<button class="agent-row agent-detail-button" data-action="agent" data-id="${e(agent.id)}"><span class="agent-icon" aria-hidden="true">${e(String(agent.name || '?').slice(0, 1).toUpperCase())}</span><span class="agent-info"><strong title="${e(agent.name)}">${e(agent.name)}</strong><small>${e(roles)}，在 ${e(machine?.name || '未知电脑')} 上，用 ${e(providerLabel(agent.provider))}</small></span>${stateBadge(status)}</button>`;
+      return `<button class="agent-row agent-detail-button" data-action="agent" data-id="${e(agent.id)}"><span class="agent-icon" aria-hidden="true">${e(
+        String(agent.name || '?')
+          .slice(0, 1)
+          .toUpperCase(),
+      )}</span><span class="agent-info"><strong title="${e(agent.name)}">${e(agent.name)}</strong><small>${e(roles)}，在 ${e(machine?.name || '未知电脑')} 上，用 ${e(providerLabel(agent.provider))}</small></span>${stateBadge(status)}</button>`;
     })
     .join('')}`;
 }
@@ -311,7 +315,10 @@ function preferenceRows(profile) {
     ['速度', score(profile.speed)],
     ['性价比', score(profile.economy)],
     ['最高承接难度', e(difficultyLabels[profile.max_difficulty] || '未知')],
-    ['上下文容量', profile.context_window ? `${Number(profile.context_window).toLocaleString('zh-CN')} tokens` : '未声明'],
+    [
+      '上下文容量',
+      profile.context_window ? `${Number(profile.context_window).toLocaleString('zh-CN')} tokens` : '未声明',
+    ],
     ['额度声明', e(quotaLabels[profile.quota_state] || '未知')],
   ];
   if (profile.paused_until > now)
@@ -331,21 +338,35 @@ export function openAgent(id, state, openModal) {
   const fact = (ok, yes, no, unknown) =>
     ok === true ? ['ok', yes] : ok === false ? ['bad', no] : ['unknown', unknown];
   const facts = [
-    ['电脑', machine?.online ? ['ok', `${machine.name} 在线`] : ['bad', `${machine?.name || '未知电脑'} 离线`]],
+    [
+      '电脑',
+      machine?.online ? ['ok', `${machine.name} 在线`] : ['bad', `${machine?.name || '未知电脑'} 离线`],
+    ],
     [
       '客户端',
       stale && typeof r.installed === 'boolean'
         ? ['unknown', `上次报告：${r.installed ? '检测到' : '未找到'}，电脑离线后无法确认`]
-        : fact(typeof r.installed === 'boolean' ? r.installed : null, `检测到 ${providerLabel(agent.provider)}`, '没有找到客户端', '还没检测'),
+        : fact(
+            typeof r.installed === 'boolean' ? r.installed : null,
+            `检测到 ${providerLabel(agent.provider)}`,
+            '没有找到客户端',
+            '还没检测',
+          ),
     ],
     [
       '本地连接',
-      stale ? ['unknown', '电脑离线，无法确认'] : fact(r.transport_ready, '连接正常', '连接不可用', '还没检查'),
+      stale
+        ? ['unknown', '电脑离线，无法确认']
+        : fact(r.transport_ready, '连接正常', '连接不可用', '还没检查'),
     ],
     [
       '成员',
       [
-        status.tone === 'ready' || status.tone === 'busy' ? 'ok' : status.tone === 'problem' ? 'bad' : 'unknown',
+        status.tone === 'ready' || status.tone === 'busy'
+          ? 'ok'
+          : status.tone === 'problem'
+            ? 'bad'
+            : 'unknown',
         status.check ? `${status.label}，检测尚未通过（${status.check.label}）` : status.label,
       ],
     ],
@@ -361,7 +382,9 @@ export function openAgent(id, state, openModal) {
         ([label, [tone, text]]) =>
           `<li class="fact-${tone}"><span class="fact-mark" aria-hidden="true"></span><span class="fact-label">${label}</span><span class="fact-text">${e(text)}</span></li>`,
       )
-      .join('')}</ol>${r.reason ? `<div class="notice">${e(r.reason)}</div>` : ''}<dl class="detail-meta member-meta"><div><dt>模型</dt><dd>${e(agent.model || '跟随客户端设置')}</dd></div><div><dt>会话</dt><dd>${agent.mode === 'existing' ? '接续指定的桌面会话' : '每个任务新建会话'}</dd></div><div><dt>能力</dt><dd>${e(
+      .join(
+        '',
+      )}</ol>${r.reason ? `<div class="notice">${e(r.reason)}</div>` : ''}<dl class="detail-meta member-meta"><div><dt>模型</dt><dd>${e(agent.model || '跟随客户端设置')}</dd></div><div><dt>会话</dt><dd>${agent.mode === 'existing' ? '接续指定的桌面会话' : '每个任务新建会话'}</dd></div><div><dt>能力</dt><dd>${e(
       asArray(agent.capabilities)
         .map((value) => capabilityLabels[value] || value)
         .join('、') || '未声明',

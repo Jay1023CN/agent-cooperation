@@ -30,6 +30,8 @@ async def call(db: str, tool: str, arguments: dict) -> dict:
 
 
 def main():
+    sys.stdin.reconfigure(encoding="utf-8")
+    sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db", required=True)
     parser.add_argument(

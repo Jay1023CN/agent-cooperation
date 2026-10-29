@@ -80,10 +80,23 @@ Claude 官方文档说明了本机消息入口，但未保证帧格式和注册�
 已有会话尚未刷新 MCP 工具定义时，可在源码环境中使用轻量的 MCP 传输客户端：
 
 ```text
-python -B -m agent_link.handoff_client --db <数据库绝对路径> next_task "<JSON 参数>"
+python -B -X utf8 -m agent_link.handoff_client --db <数据库绝对路径> next_task "<JSON 参数>"
 ```
 
 它只连接本机 stdio MCP 服务，不启动模型。支持 `next_task`、`task_status`、`report_progress`、`wait_for_update`、`complete_and_wait` 和 `submit_result`；参数也可用 `-` 从标准输入读取。原生包通过 `pal-arena internal-handoff-client` 提供同一入口。领取凭据只在当前会话和私有交接库使用，不要提交进 Git。
+
+### 真实桌面验证
+
+2026-10-29，在 Windows 上使用已有的 Claude Desktop 会话与 Codex，完成了这轮本机交接：
+
+1. 宿主通过 MCP 发布“电脑与成员页”代码任务，通知明确选定的已有会话；桌面用 `next_task` 领取，宿主取得消费者与请求回执。
+2. Claude 用 `report_progress` 回传进度，直接修改页面和样式，交回 Git 提交。宿主通过 `post_message` 补充验收要求，Claude 用 `wait_for_update` 读取并修正“执行中”被未知检测状态遮住的问题。
+3. 最终候选通过 `complete_and_wait` 提交，提交为 [`ee9284d`](https://github.com/Jay1023CN/agent-cooperation/commit/ee9284d455fbb237319bc2665fc6feedf1ba784a)。相对基准只改动 `frontend/src/views/dashboard.js` 和 `frontend/src/styles.css`；宿主通过 `verify_git_delivery` 核对完整 SHA、祖先关系、变更范围和干净工作区。
+4. Codex 独立完成回归：前端 13 项测试通过；在独立测试中心验证真实登录、机器与成员状态、详情弹窗、指南按钮和键盘操作，360px 深色页面无横向溢出。Python 全量 1438 项通过、18 项按环境跳过；旧 Windows 管道编码下的中文和 emoji 交接也已覆盖。
+
+这轮确认的是同一台 Windows 上的真实桌面会话协作；跨电脑的完整 Arena 调度、依赖交接和订阅链路仍需另做实机联调。
+
+客户端升级后，窗口和历史可能已经恢复，代码进程却还没有恢复。不能因为本机 inbox 列表为空就判断桌面已关闭。本次在保留原会话 ID 的情况下重启客户端、回到原会话，待连接器加载完成后恢复了消息管道，再以真实领取回执确认连接。
 
 宿主停止续期后，任务到期便不能再领取、提交或自动续期；到期记录会保留供检查，不能视为可以重派。桌面会话本身不会被强制停止，必须通过 `task_status` 主动检查；续期依赖本机系统时钟。旧版本数据库里没有期限的未完成记录升级后视为已过期。
 
