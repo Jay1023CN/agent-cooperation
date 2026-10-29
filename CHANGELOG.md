@@ -2,6 +2,30 @@
 
 <!-- version list -->
 
+## v1.10.0 (2026-10-29)
+
+### Chores
+
+- Sync version to config.py [skip ci]
+  ([`8af8a85`](https://github.com/Jay1023CN/agent-cooperation/commit/8af8a85ac3ad9e410fc26403c463de2ea9578723))
+
+### Documentation
+
+- Mac mini 安装助手固定到 v1.9.0 发布包
+  ([`14457c8`](https://github.com/Jay1023CN/agent-cooperation/commit/14457c8359867fa3eddf24cbd1b8076e79288dd6))
+
+- 优化中英文首页并补充 v1.9.0 下载与 DSH 接入说明 [skip ci]
+  ([`a6a1dfc`](https://github.com/Jay1023CN/agent-cooperation/commit/a6a1dfc709360baea0e622635a647d051e878e67))
+
+- 修正 Mac 安装说明的发布包提交标识
+  ([`0f2a008`](https://github.com/Jay1023CN/agent-cooperation/commit/0f2a008b9fac00aac66be516095a96630e29f32b))
+
+### Features
+
+- **handoff**: 支持桌面持续接单与本机会话消息交接
+  ([`c392b84`](https://github.com/Jay1023CN/agent-cooperation/commit/c392b844ea6cea8be8b86ea926fd206eb5923b80))
+
+
 ## v1.9.0 (2026-10-28)
 
 ### Chores
