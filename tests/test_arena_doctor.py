@@ -39,6 +39,9 @@ def check(report, name):
 
 def test_doctor_never_launches_a_cli_or_sends_a_model_prompt(diagnostic_environment, monkeypatch):
     path, _ = diagnostic_environment
+    monkeypatch.setattr("arena.worker.platform.node", lambda: "fixture-machine")
+    monkeypatch.setattr("arena.doctor.platform.system", lambda: "Windows")
+    monkeypatch.setattr("arena.doctor.platform.machine", lambda: "AMD64")
     forbidden = Mock(side_effect=AssertionError("diagnostics must not execute tasks"))
     monkeypatch.setattr("arena.worker.run_process", forbidden)
     monkeypatch.setattr("subprocess.Popen", forbidden)

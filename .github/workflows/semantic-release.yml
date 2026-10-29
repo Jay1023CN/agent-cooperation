@@ -33,8 +33,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install python-semantic-release
 
-      # Pull requests run the focused cross-platform contracts and native-package smoke checks.
-      # The complete suite remains available from the manual Full Test Suite workflow.
+      - name: Install core validation dependencies
+        run: python -m pip install -e ".[platform]" pytest pytest-asyncio
+
+      - name: Run core contracts before publishing
+        env:
+          PYTHONUTF8: '1'
+        run: |
+          python -m pytest tests/test_agentlink_contracts.py tests/test_agentlink_tool.py tests/test_arena_doctor.py -q
+          python -m pytest tests/test_arena_worker.py -q -k "pal_task_failure_preserves_actionable_error or pal_transport_failure_preserves_actionable_error"
+
       - name: Run semantic release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
