@@ -287,7 +287,7 @@ function render() {
 /** The compacted part of this channel, once the server has folded older messages into a summary. */
 function channelSummary() {
   const key = channel === 'personal' ? 'personal' : 'shared';
-  const value = state.conversation_summaries?.[key];
+  const value = state.conversation_summary || state.conversation_summaries?.[key];
   if (!value) return null;
   const item = typeof value === 'string' ? { summary: value } : value;
   return item.summary ? item : null;

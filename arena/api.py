@@ -1009,6 +1009,16 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
             actor = identity(request)
             store.expire_leases()
         snapshot = store.snapshot(project_id, channel, actor["id"])
+        with store.lock:
+            scoped_channel = f'personal:{actor["id"]}' if channel == "personal" else "shared"
+            snapshot["conversation_summary"] = (
+                store.one(
+                    "SELECT summary,revision,updated FROM conversation_summaries WHERE project_id=? AND channel=?",
+                    (project_id, scoped_channel),
+                )
+                if project_id
+                else None
+            )
         snapshot["projects"] = [project_view(project) for project in snapshot["projects"]]
         return snapshot
 
@@ -1244,9 +1254,7 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
             }
 
     @app.get("/api/projects/{project_id}/conversation-summary")
-    def conversation_summary_read(
-        project_id: str, request: Request, channel: Literal["shared", "personal"] = "shared"
-    ):
+    def conversation_summary_read(project_id: str, request: Request, channel: Literal["shared", "personal"] = "shared"):
         actor = identity(request)
         with store.lock:
             store.project(project_id)

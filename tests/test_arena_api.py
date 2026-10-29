@@ -847,10 +847,8 @@ def test_conversation_summary_is_incremental_and_channel_scoped(arena):
         json={"summary": "过期修改", "expected_revision": 2},
     )
     assert stale.status_code == 409
-    private_visible = client.get(
-        f'/api/projects/{p["id"]}/conversation-summary', params={"channel": "personal"}
-    ).json()
-    assert private_visible["channel"] == f'personal:{owner}' and private_visible["summary"] == "私人偏好"
+    private_visible = client.get(f'/api/projects/{p["id"]}/conversation-summary', params={"channel": "personal"}).json()
+    assert private_visible["channel"] == f"personal:{owner}" and private_visible["summary"] == "私人偏好"
     private_edit = client.put(
         f'/api/projects/{p["id"]}/conversation-summary?channel=personal',
         json={"summary": "修订后的私人摘要", "expected_revision": 1},
@@ -863,6 +861,16 @@ def test_conversation_summary_is_incremental_and_channel_scoped(arena):
         params={"channel": "personal"},
     ).json()
     assert partner_personal["summary"] == "" and partner_personal["channel"] == f'personal:{partner["id"]}'
+    shared_state = client.get("/api/state", params={"project_id": p["id"], "channel": "shared"}).json()
+    private_state = client.get("/api/state", params={"project_id": p["id"], "channel": "personal"}).json()
+    other_state = client.get(
+        "/api/state",
+        params={"project_id": p["id"], "channel": "personal"},
+        headers={"Authorization": "Bearer " + partner["token"]},
+    ).json()
+    assert shared_state["conversation_summary"]["summary"] == "修订后的共享摘要"
+    assert private_state["conversation_summary"]["summary"] == "修订后的私人摘要"
+    assert other_state["conversation_summary"] is None
 
 
 def test_center_quota_blocks_new_work_and_keeps_existing_data(arena):

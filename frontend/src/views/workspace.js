@@ -75,8 +75,7 @@ export function renderReviews(state) {
                   '',
                 )}</ul><button class="button small" data-action="task" data-id="${e(task.id)}">查看证据</button></article>`,
           )
-          .join('')}</div>`) +
-    `<div class="file-storage"><span>中心 ${size(storage.used)} / ${size(storage.quota)} · ${e(centerReason)}${storage.disk_free_bytes != null ? ` · 磁盘剩余 ${size(storage.disk_free_bytes)}` : ''}</span></div>${machines ? `<div class="file-list">${machines}</div>` : ''}`;
+          .join('')}</div>`);
 }
 
 const previewable = /\.(txt|md|json|csv|py|js|ts|css|html?|svg|log|png|jpe?g|gif|webp|avif|bmp)$/i;
