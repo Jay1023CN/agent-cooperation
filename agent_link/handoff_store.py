@@ -63,6 +63,10 @@ class HandoffStore:
             )
             db.execute("CREATE INDEX IF NOT EXISTS handoff_message_cursor ON handoff_messages(lineage, id)")
             db.execute(
+                "CREATE TABLE IF NOT EXISTS handoff_message_acks ("
+                "message_row_id INTEGER PRIMARY KEY, acknowledged REAL NOT NULL)"
+            )
+            db.execute(
                 "CREATE TABLE IF NOT EXISTS handoff_notifications ("
                 "lineage TEXT NOT NULL, session_id TEXT NOT NULL, state TEXT NOT NULL, "
                 "PRIMARY KEY(lineage,session_id))"
@@ -108,6 +112,14 @@ class HandoffStore:
         with self._connect() as db:
             db.execute(
                 "UPDATE handoff_notifications SET state='transport_written' WHERE lineage=? AND session_id=?",
+                (lineage, session_id),
+            )
+
+    def discard_unsent_notification(self, lineage: str, session_id: str):
+        """Release only an attempt proven to have failed before any transport operation."""
+        with self._connect() as db:
+            db.execute(
+                "DELETE FROM handoff_notifications WHERE lineage=? AND session_id=? AND state='uncertain'",
                 (lineage, session_id),
             )
 
@@ -206,6 +218,12 @@ class HandoffStore:
                 return
             if self._state(row, time.time()) != "claimed":
                 raise HandoffError("Handoff is not accepting a result")
+            if db.execute(
+                "SELECT 1 FROM handoff_messages m LEFT JOIN handoff_message_acks a ON a.message_row_id=m.id "
+                "WHERE m.lineage=? AND m.sender='host' AND a.message_row_id IS NULL LIMIT 1",
+                (lineage,),
+            ).fetchone():
+                raise HandoffError("Unread host messages: read and acknowledge every message before submitting")
             db.execute(
                 "UPDATE handoffs SET state='submitted', result=?, updated=? WHERE lineage=?",
                 (encoded, time.time(), lineage),
@@ -221,6 +239,12 @@ class HandoffStore:
             notifications = db.execute(
                 "SELECT session_id, state FROM handoff_notifications WHERE lineage=? ORDER BY session_id", (lineage,)
             ).fetchall()
+            receipts = db.execute(
+                "SELECT m.message_id, (a.message_row_id IS NOT NULL) AS acknowledged "
+                "FROM handoff_messages m LEFT JOIN handoff_message_acks a ON a.message_row_id=m.id "
+                "WHERE m.lineage=? AND m.sender='host' ORDER BY m.id",
+                (lineage,),
+            ).fetchall()
         if row is None:
             return None
         return {
@@ -228,6 +252,10 @@ class HandoffStore:
             "state": self._state(row, time.time()),
             "result": json.loads(row["result"]) if row["result"] else None,
             "notifications": [dict(notification) for notification in notifications],
+            "message_receipts": [
+                {"message_id": receipt["message_id"], "acknowledged": bool(receipt["acknowledged"])}
+                for receipt in receipts
+            ],
         }
 
     def submitted_workspace(self, lineage: str) -> str:
@@ -456,3 +484,25 @@ class HandoffStore:
             if role == "host" and task["result"]:
                 result["result"] = json.loads(task["result"])
             return result
+
+    def acknowledge_message(self, lineage: str, handle: str, message_id: str) -> dict:
+        """Record that the desktop consumer has processed one specific host message."""
+        self._identifier(message_id, "message_id")
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            task = db.execute("SELECT * FROM handoffs WHERE lineage=?", (lineage,)).fetchone()
+            self._owned(task, handle)
+            message = db.execute(
+                "SELECT id FROM handoff_messages WHERE lineage=? AND sender='host' AND message_id=?",
+                (lineage, message_id),
+            ).fetchone()
+            if not message:
+                raise HandoffError("Unknown host message")
+            existing = db.execute(
+                "SELECT 1 FROM handoff_message_acks WHERE message_row_id=?", (message["id"],)
+            ).fetchone()
+            if not existing:
+                if self._state(task, time.time()) != "claimed":
+                    raise HandoffError("Handoff is not accepting acknowledgements")
+                db.execute("INSERT INTO handoff_message_acks VALUES (?, ?)", (message["id"], time.time()))
+            return {"message_id": message_id, "acknowledged": True, "recovered": bool(existing)}

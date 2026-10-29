@@ -20,6 +20,10 @@ from pathlib import Path
 from .handoff_store import HandoffError
 
 
+class ClaudePreflightError(HandoffError):
+    """The notification failed before any connection or write was attempted."""
+
+
 def _json_file(path: Path, maximum: int = 65536, private: bool = False) -> dict:
     info = path.lstat()
     if not stat.S_ISREG(info.st_mode) or info.st_size > maximum:
@@ -183,6 +187,20 @@ class ClaudePeer:
         return sessions
 
     def send(self, session_id: str, expected_cwd: str, text: str, message_id: str) -> dict:
+        try:
+            endpoint, data = self._prepare(session_id, expected_cwd, text, message_id)
+        except (OSError, ValueError, subprocess.SubprocessError, HandoffError) as exc:
+            raise ClaudePreflightError(str(exc)) from exc
+        if os.name == "nt":
+            _write_pipe(endpoint, data)
+        else:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+                connection.settimeout(2)
+                connection.connect(endpoint)
+                connection.sendall(data)
+        return {"state": "transport_written", "session_id": session_id, "message_id": message_id, "delivered": False}
+
+    def _prepare(self, session_id: str, expected_cwd: str, text: str, message_id: str) -> tuple[str, bytes]:
         if not text.strip() or len(text.encode("utf-8")) > 8192:
             raise HandoffError("Claude notification must contain 1 to 8192 bytes")
         if not re.fullmatch(r"[a-zA-Z0-9_.:-]{1,128}", message_id):
@@ -219,11 +237,4 @@ class ClaudePeer:
             {"type": "user", "msgV": 1, "msg_id": message_id, "message": {"role": "user", "content": text}},
         ]
         data = ("\n".join(json.dumps(frame, ensure_ascii=False) for frame in frames) + "\n").encode("utf-8")
-        if os.name == "nt":
-            _write_pipe(endpoint, data)
-        else:
-            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
-                connection.settimeout(2)
-                connection.connect(endpoint)
-                connection.sendall(data)
-        return {"state": "transport_written", "session_id": session_id, "message_id": message_id, "delivered": False}
+        return endpoint, data

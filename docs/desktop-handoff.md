@@ -38,6 +38,7 @@ python -m agent_link.desktop_handoff --db <数据库绝对路径> --role desktop
 - `action=handoff_progress`：传入 `lineage`、`handle`、`message_id`、`message`，向宿主回报进度。
 - `action=handoff_message` / `handoff_messages`：发送任务消息，或从 `after` 游标读取宿主消息。
 - `action=handoff_wait`：等待消息或任务状态变化，最多 25 秒，返回 `next_after` 游标与 `timed_out`。
+- `action=handoff_acknowledge`：处理宿主补充后，用消息的 `message_id` 和领取凭据确认；所有宿主消息确认后才能提交。
 - `action=handoff_continue`：提交候选结果后等待下一单；额外传入 `consumer_id`、下一次领取的 `request_id` 和 `wait_seconds`。
 
 这些操作直接复用原型的领取、到期、取消和提交规则，不调用模型 API，也不启动新的模型会话。文档可直接放在交接说明和结果摘要中，较大的文件通过证据路径交接。宿主仍使用上面的 `host` MCP 发布、续期和查看结果。
@@ -63,6 +64,7 @@ MCP 工具可用、任务已领取、结果已回传是三个不同状态，应�
 - `complete_and_wait` 的重试必须保留提交内容、证据和下一次领取 ID。当前结果提交和下一次领取各自保留回执，连接中断不会自动重派。
 - `idle` 表示本次等待没有任务；`timed_out=true` 表示没有新消息或状态变化。它们都不代表任务已完成，也不会续期。用户仍授权持续协作时，客户端可继续等待；用户要求停止时退出循环。
 - 消息使用调用方提供的 `message_id` 去重。相同 ID、相同内容重试返回原回执；改变内容会被拒绝。每条消息最多 8 KiB，每个任务最多 200 条，分页游标保持稳定。
+- 桌面收到宿主的每条补充后，先处理内容，再用 `acknowledge_message(lineage, handle, message_id)` 确认。读取消息本身不算确认；确认可用相同参数安全重试，宿主可在 `inspect_task` 的 `message_receipts` 查看状态。只要还有未确认的宿主消息，`submit_result` 和 `complete_and_wait` 都会拒绝提交；提交检查与宿主发消息使用数据库事务，避免并发时漏掉要求。升级后需要重启已有交接 MCP 进程，旧工具列表可使用下方的轻量客户端调用确认工具。
 - 桌面读取和发送任务消息需要正确的领取凭据；取消或过期后不能再发送新消息、提交结果或恢复执行。等待登记只有短期有效性，不等于桌面应用永久在线。
 
 `channel_capabilities` 返回协议版本、等待上限和能力声明。`application_wakeup=false` 表示服务端不支持唤醒空闲应用。当前已用两个独立的真实 MCP stdio 进程验证持续交接；这与真实 Claude 客户端已加载新版工具、进入等待并领取代码任务是不同的验证阶段。
@@ -73,7 +75,7 @@ Claude Code 的[跨会话消息](https://code.claude.com/docs/en/cross-session-m
 
 先用列表确认明确的 `sessionId` 和 `cwd`，发布带有接收者的任务，然后调用 `notify_claude_task(lineage, session_id, expected_cwd)`。调用者必须已获得用户向该会话发消息的授权。适配器核对进程启动时间、工作目录和管道对应的本机 peer key；不使用代表接收方子进程的 `CLAUDE_CODE_MESSAGING_TOKEN`，也不声明自己具有其他权限级别。接收方仍可保留或拒绝消息。
 
-返回 `transport_written` 只说明已写入管道，`delivered=false` 明确表示还没有应用层回执。检查任务的 `consumer_id`、`request_id` 和进度消息，才能确认已领取；结果仍需独立验收。每个任务和会话组合只尝试通知一次，发送前先持久记录；连接中断或进程崩溃留下 `uncertain` 时不会自动重发。已退出的会话不在列表中，任务也不会因此另开模型进程。
+返回 `transport_written` 只说明已写入管道，`delivered=false` 明确表示还没有应用层回执。检查任务的 `consumer_id`、`request_id` 和进度消息，才能确认已领取；结果仍需独立验收。发送前先持久记录：如果会话或工作目录等预检明确失败、尚未尝试连接和写入，修正后可以重新通知；传输中断或进程崩溃留下 `uncertain` 时不会自动重发。已退出的会话不在列表中，任务也不会因此另开模型进程。
 
 Claude 官方文档说明了本机消息入口，但未保证帧格式和注册文件的稳定性，因此此适配器默认关闭。当前版本支持 `peerProtocol=1`；客户端升级后应重新做实际领取验证。仅有适配器和传输夹具通过，不能宣称真实 Claude 已收到任务。
 
@@ -83,7 +85,7 @@ Claude 官方文档说明了本机消息入口，但未保证帧格式和注册�
 python -B -X utf8 -m agent_link.handoff_client --db <数据库绝对路径> next_task "<JSON 参数>"
 ```
 
-它只连接本机 stdio MCP 服务，不启动模型。支持 `next_task`、`task_status`、`report_progress`、`wait_for_update`、`complete_and_wait` 和 `submit_result`；参数也可用 `-` 从标准输入读取。原生包通过 `pal-arena internal-handoff-client` 提供同一入口。领取凭据只在当前会话和私有交接库使用，不要提交进 Git。
+它只连接本机 stdio MCP 服务，不启动模型。支持 `next_task`、`task_status`、`report_progress`、`wait_for_update`、`acknowledge_message`、`complete_and_wait` 和 `submit_result`；参数也可用 `-` 从标准输入读取。原生包通过 `pal-arena internal-handoff-client` 提供同一入口。领取凭据只在当前会话和私有交接库使用，不要提交进 Git。
 
 ### 真实桌面验证
 

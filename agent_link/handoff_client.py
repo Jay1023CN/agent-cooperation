@@ -41,6 +41,7 @@ def main():
             "task_status",
             "report_progress",
             "wait_for_update",
+            "acknowledge_message",
             "complete_and_wait",
             "submit_result",
         ),

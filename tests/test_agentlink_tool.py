@@ -105,6 +105,7 @@ async def test_pal_continuous_handoff_and_live_messages_never_launch_model(tmp_p
     update = await call("handoff_wait", **owned, wait_seconds=0)
     assert update["messages"][0]["text"] == "不要改测试"
     assert (await call("handoff_messages", **owned, after=update["next_after"]))["messages"] == []
+    assert (await call("handoff_acknowledge", **owned, message_id="scope"))["acknowledged"]
     with pytest.raises(Exception, match="evidence"):
         await call(
             "handoff_continue",

@@ -75,6 +75,7 @@ async def test_host_and_desktop_handoff_through_separate_mcp_processes(tmp_path)
             "next_task",
             "complete_and_wait",
             "report_progress",
+            "acknowledge_message",
         }
         first_workspace = tmp_path / "first-workspace"
         first_workspace.mkdir()

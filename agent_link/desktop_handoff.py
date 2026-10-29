@@ -17,7 +17,7 @@ from typing import Callable
 
 from mcp.server.fastmcp import FastMCP
 
-from .claude_peer import ClaudePeer
+from .claude_peer import ClaudePeer, ClaudePreflightError
 from .coordination_client import CoordinationClient, CoordinationError
 from .git_evidence import inspect_git_delivery
 from .handoff_channel import HandoffChannel
@@ -55,10 +55,11 @@ def build_server(
     def channel_capabilities() -> dict:
         """Describe the live handoff protocol without contacting a model or desktop application."""
         return {
-            "version": 2,
+            "version": 3,
             "role": role,
             "max_wait_seconds": 25,
             "messages": True,
+            "message_acknowledgements": True,
             "continuous_handoff": True,
             "application_wakeup": False,
             "claude_peer_notification": role == "host" and claude_peer is not None,
@@ -126,11 +127,16 @@ def build_server(
                     f"next_task 参数={json.dumps({'consumer_id': payload.get('recipient') or 'claude-ui', 'request_id': 'notify-' + receipt_id, 'wait_seconds': 0}, ensure_ascii=False)}\n"
                     "客户端用法：在命令前缀后追加工具名称和一个 JSON 参数字符串；也可追加工具名称和 '-'，从标准输入传 JSON。"
                     "返回值包含完整任务说明和 handle；保存领取凭据，先检查状态再改代码，"
-                    "用 report_progress 回报，通过 wait_for_update 读取补充，取消或过期立即停止。"
+                    "用 report_progress 回报，通过 wait_for_update 读取补充，处理每条后用 acknowledge_message 确认；"
+                    "取消或过期立即停止。"
                     "完成后使用 complete_and_wait 提交 summary 和 evidence；request_id 使用下一次领取的新 ID。"
                     "收到任务后先发进度回执，不能把收到此消息当作已领取或已验收。"
                 )
-                result = claude_peer.send(session_id, expected_cwd, content, "handoff-" + receipt_id)
+                try:
+                    result = claude_peer.send(session_id, expected_cwd, content, "handoff-" + receipt_id)
+                except ClaudePreflightError:
+                    store.discard_unsent_notification(lineage, session_id)
+                    raise
                 store.finish_notification(lineage, session_id)
                 return result
 
@@ -207,6 +213,11 @@ def build_server(
 
     else:
 
+        @mcp.tool()
+        def acknowledge_message(lineage: str, handle: str, message_id: str) -> dict:
+            """Confirm one host message after processing it; retries return the existing receipt."""
+            return store.acknowledge_message(lineage, handle, message_id)
+
         @mcp.prompt()
         def cooperate(consumer_id: str = "claude-ui") -> str:
             """Start an authorized continuous collaboration loop in this existing conversation."""
@@ -215,7 +226,7 @@ def build_server(
                 f"在当前会话中作为 {consumer_id} 持续协作，不新开模型进程。"
                 "调用 next_task，consumer_id 固定，每次新领取使用新的 request_id；响应丢失时用原 ID 恢复。"
                 "领取后先检查状态，按任务范围直接编写代码，并通过 report_progress 回报进展；"
-                "用 wait_for_update 接收宿主补充消息，取消或过期立即停止。"
+                "用 wait_for_update 接收宿主补充消息，处理每条后用 acknowledge_message 确认；取消或过期立即停止。"
                 "完成后调用 complete_and_wait 回传 summary、非空 evidence，并等待下一项任务。"
                 "若 next 中已包含任务，直接处理，不再次领取。recovered=true 时先核对已有工作，不能重复执行。"
                 "idle 只表示本次等待超时；仅在用户仍授权持续协作时继续等待，用户要求停止时退出。"
@@ -249,7 +260,7 @@ def build_server(
             """Submit this consumer's candidate and wait for its next task in the same tool call.
 
             request_id identifies the NEXT claim; preserve all arguments when recovering an uncertain response.
-            The host remains responsible for testing and accepting the candidate. No new model process is started.
+            Read and acknowledge each host message before submitting. The host remains responsible for acceptance.
             """
             return await channel.complete_and_wait(
                 lineage, handle, summary, evidence, consumer_id, request_id, wait_seconds

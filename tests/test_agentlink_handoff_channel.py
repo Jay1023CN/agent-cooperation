@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import sys
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import AsyncExitStack
 
@@ -121,6 +122,7 @@ async def test_idle_cancellation_and_complete_and_wait_recovery(tmp_path):
     store.post_message("host", "one", "before-claim", "先读这条补充要求", "directive")
     first = await channel.next_task("claude-ui", "first", 0)
     assert first["messages"][0]["text"] == "先读这条补充要求"
+    store.acknowledge_message("one", first["handle"], "before-claim")
     offer(store, "two")
     with pytest.raises(HandoffError, match="Consumer does not own"):
         await channel.complete_and_wait("one", first["handle"], "done", ["file"], "other", "next", 0)
@@ -135,6 +137,71 @@ async def test_idle_cancellation_and_complete_and_wait_recovery(tmp_path):
     await asyncio.sleep(0.05)
     store.cancel("two")
     assert (await update)["state"] == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_submissions_require_explicit_receipts_for_all_host_messages(tmp_path):
+    store = HandoffStore(tmp_path / "db")
+    channel = HandoffChannel(store)
+    offer(store)
+    claim = await channel.next_task("claude-ui", "first", 0)
+    handle = claim["handle"]
+    store.post_message("host", "one", "first-note", "请检查细节", "note")
+    store.post_message("host", "one", "new-requirement", "补充验收条件", "directive")
+    # Reading alone is not a durable receipt: the tool response may have been lost.
+    messages = store.read_messages("desktop", "one", handle=handle)["messages"]
+    assert len(messages) == 2
+    with pytest.raises(HandoffError, match="acknowledge"):
+        store.submit("one", handle, {"summary": "candidate"})
+    with pytest.raises(HandoffError, match="Invalid handoff handle"):
+        store.acknowledge_message("one", "wrong", "first-note")
+    with pytest.raises(HandoffError, match="Unknown host message"):
+        store.acknowledge_message("one", handle, "missing")
+    assert store.acknowledge_message("one", handle, "first-note")["recovered"] is False
+    assert HandoffStore(tmp_path / "db").acknowledge_message("one", handle, "first-note")["recovered"] is True
+    with pytest.raises(HandoffError, match="acknowledge"):
+        await channel.complete_and_wait("one", handle, "done", ["commit"], "claude-ui", "next", 0)
+    assert store.inspect("one")["message_receipts"] == [
+        {"message_id": "first-note", "acknowledged": True},
+        {"message_id": "new-requirement", "acknowledged": False},
+    ]
+    store.acknowledge_message("one", handle, "new-requirement")
+    assert (await channel.complete_and_wait("one", handle, "done", ["commit"], "claude-ui", "next", 0))[
+        "state"
+    ] == "submitted"
+    assert store.acknowledge_message("one", handle, "new-requirement")["recovered"] is True
+
+
+def test_concurrent_host_message_and_submission_cannot_both_succeed(tmp_path):
+    path = tmp_path / "db"
+    store = HandoffStore(path)
+    offer(store)
+    handle = store.claim_next("claude-ui", "first")["handle"]
+    barrier = threading.Barrier(2)
+
+    def send_message():
+        peer = HandoffStore(path)
+        barrier.wait()
+        try:
+            peer.post_message("host", "one", "late", "新增要求", "directive")
+            return "sent"
+        except HandoffError:
+            return "rejected"
+
+    def submit():
+        peer = HandoffStore(path)
+        barrier.wait()
+        try:
+            peer.submit("one", handle, {"summary": "candidate"})
+            return "submitted"
+        except HandoffError:
+            return "rejected"
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        sent = pool.submit(send_message)
+        submitted = pool.submit(submit)
+        outcome = (sent.result(), submitted.result())
+    assert outcome in (("sent", "rejected"), ("rejected", "submitted"))
 
 
 def test_message_and_payload_bounds(tmp_path):
@@ -253,6 +320,13 @@ async def test_two_real_mcp_processes_continue_without_desktop_control(tmp_path)
         await call(host, "post_message", lineage="one", message_id="scope", text="不要改后端", kind="directive")
         instruction = await call(desktop, "wait_for_update", lineage="one", handle=first["handle"], wait_seconds=0)
         assert instruction["messages"][0]["text"] == "不要改后端"
+        rejected = await desktop.call_tool(
+            "submit_result", {"lineage": "one", "handle": first["handle"], "summary": "done", "evidence": ["file"]}
+        )
+        assert rejected.isError
+        assert (await call(desktop, "acknowledge_message", lineage="one", handle=first["handle"], message_id="scope"))[
+            "acknowledged"
+        ]
         continuation = asyncio.create_task(
             call(
                 desktop,

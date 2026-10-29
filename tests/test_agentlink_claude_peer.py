@@ -142,6 +142,25 @@ async def test_host_notification_is_opt_in_and_uncertain_delivery_is_not_retried
 
 
 @pytest.mark.asyncio
+async def test_preflight_failure_allows_retry_after_session_returns(peer_fixture, monkeypatch, tmp_path):
+    peer, _, _, _ = peer_fixture
+    store = HandoffStore(tmp_path / "handoff.sqlite")
+    store.create("task", "task", {"workspace": str(tmp_path), "prompt": "Build UI", "recipient": "claude-ui"})
+    server = build_server(store, "host", claude_peer=peer)
+    params = {"lineage": "task", "session_id": "test-session", "expected_cwd": str(tmp_path)}
+    original_load = peer._load
+    monkeypatch.setattr(peer, "_load", lambda _: (_ for _ in ()).throw(HandoffError("offline")))
+    with pytest.raises(Exception, match="verified live Claude session"):
+        await server.call_tool("notify_claude_task", params)
+    assert store.inspect("task")["notifications"] == []
+    monkeypatch.setattr(peer, "_load", original_load)
+    monkeypatch.setattr(claude_peer, "_write_pipe", lambda *args: None)
+    result = await server.call_tool("notify_claude_task", params)
+    assert "transport_written" in str(result)
+    assert store.inspect("task")["notifications"][0]["state"] == "transport_written"
+
+
+@pytest.mark.asyncio
 async def test_successful_notification_still_requires_a_claim_receipt(tmp_path):
     store = HandoffStore(tmp_path / "handoff.sqlite")
     store.create("task", "task", {"workspace": str(tmp_path), "prompt": "Build UI", "recipient": "claude-ui"})

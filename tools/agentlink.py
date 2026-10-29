@@ -37,6 +37,7 @@ class AgentLinkRequest(BaseModel):
         "handoff_next",
         "handoff_message",
         "handoff_messages",
+        "handoff_acknowledge",
         "handoff_progress",
         "handoff_wait",
         "handoff_continue",
@@ -85,7 +86,8 @@ class AgentLinkTool(BaseTool):
             "an uncertain submission. Use permission_reply only for user-authorized actions."
             " For this existing desktop conversation, handoff_list/claim/status/submit exchange local documents "
             "with a host using handoff_db. handoff_next waits for work; handoff_message/progress and handoff_wait "
-            "exchange live task updates; handoff_continue submits and waits for the next task. Keep consumer_id stable "
+            "exchange updates; use handoff_acknowledge after processing every host message before submitting. "
+            "handoff_continue submits and waits for the next task. Keep consumer_id stable "
             "and preserve request_id after lost responses. They never start a model session or wake an idle application."
         )
 
@@ -157,6 +159,8 @@ class AgentLinkTool(BaseTool):
             return {"state": store.desktop_state(lineage, handle)}
         if request.action == "handoff_messages":
             return store.read_messages("desktop", lineage, request.after, request.limit, handle)
+        if request.action == "handoff_acknowledge":
+            return store.acknowledge_message(lineage, handle, self._required(request.message_id, "message_id"))
         if request.action in ("handoff_message", "handoff_progress"):
             return store.post_message(
                 "desktop",
