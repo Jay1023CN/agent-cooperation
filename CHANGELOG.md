@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.16.1 (2026-10-29)
+
+### Bug Fixes
+
+- 计算压缩预览占用确保节省空间
+  ([`40f9e30`](https://github.com/Jay1023CN/agent-cooperation/commit/40f9e30f1186a63912ab8553f14753c7a7647f44))
+
+
 ## v1.16.0 (2026-10-29)
 
 ### Features

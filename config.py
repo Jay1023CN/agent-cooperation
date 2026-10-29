@@ -14,7 +14,7 @@ from utils.env import get_env
 # These values are used in server responses and for tracking releases
 # IMPORTANT: This is the single source of truth for version and author info
 # Semantic versioning: MAJOR.MINOR.PATCH
-__version__ = "1.16.0"
+__version__ = "1.16.1"
 # Last update date in ISO format
 __updated__ = "2026-10-29"
 # Primary maintainer
