@@ -193,7 +193,7 @@ function machineNext(machine, members) {
   if (!machine.online)
     return {
       text: `最后在线 ${seenAgo(machine.seen) || '时间未知'}。在那台电脑上重新运行 worker，它会自动回来。`,
-      action: '<button class="text-link" data-action="setup-help">查看启动命令</button>',
+      action: '<button class="text-link" data-action="setup-help">查看接入步骤</button>',
     };
   if (!members.length)
     return {
