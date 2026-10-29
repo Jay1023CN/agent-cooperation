@@ -9,6 +9,7 @@ import sqlite3
 import threading
 import time
 import uuid
+import zlib
 from pathlib import Path
 
 from .routing import evaluate
@@ -45,6 +46,9 @@ class Store:
         self.lock = threading.RLock()
         self.db = sqlite3.connect(self.root / "arena.db", check_same_thread=False)
         self.db.row_factory = sqlite3.Row
+        self.db.create_function(
+            "arena_message_text", 1, lambda payload: zlib.decompress(payload).decode("utf-8") if payload else None
+        )
         self.db.executescript("""
         PRAGMA journal_mode=WAL;
         PRAGMA foreign_keys=ON;
@@ -67,6 +71,8 @@ class Store:
         CREATE TABLE IF NOT EXISTS messages (
           id TEXT PRIMARY KEY, project_id TEXT NOT NULL, author TEXT NOT NULL, content TEXT NOT NULL,
           channel TEXT NOT NULL, created REAL NOT NULL);
+        CREATE TABLE IF NOT EXISTS message_payloads (
+          message_id TEXT PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE, payload BLOB NOT NULL);
         CREATE TABLE IF NOT EXISTS tasks (
           id TEXT PRIMARY KEY, project_id TEXT NOT NULL, parent_id TEXT, source_id TEXT,
           title TEXT NOT NULL, prompt TEXT NOT NULL, kind TEXT NOT NULL, capability TEXT NOT NULL,
@@ -164,6 +170,17 @@ class Store:
         )
         # Keep bounded logs; durable task results and review evidence are separate.
         self.db.execute("DELETE FROM events WHERE id <= (SELECT MAX(id)-10000 FROM events)")
+
+    def save_message(self, message_id, project_id, author, content, channel, created):
+        raw = content.encode("utf-8")
+        compressed = zlib.compress(raw) if len(raw) >= 4096 else b""
+        use_compression = bool(compressed) and len(compressed) + 1024 < len(raw)
+        preview = content[:512] if use_compression else content
+        self.db.execute(
+            "INSERT INTO messages VALUES(?,?,?,?,?,?)", (message_id, project_id, author, preview, channel, created)
+        )
+        if use_compression:
+            self.db.execute("INSERT INTO message_payloads VALUES(?,?)", (message_id, compressed))
 
     def new_identity(self, name, kind):
         token = secrets.token_urlsafe(32)
@@ -484,8 +501,9 @@ class Store:
                 # Personal messages and execution results remain in their owner's channel.
                 personal = f"personal:{author}"
                 messages = self.all(
-                    "SELECT * FROM (SELECT * FROM messages WHERE project_id=? AND channel IN (?,?) "
-                    "ORDER BY created DESC LIMIT 150) ORDER BY created",
+                    "SELECT m.id,m.project_id,m.author,COALESCE(arena_message_text(p.payload),m.content) AS content,"
+                    "m.channel,m.created FROM (SELECT * FROM messages WHERE project_id=? AND channel IN (?,?) "
+                    "ORDER BY created DESC LIMIT 150) m LEFT JOIN message_payloads p ON p.message_id=m.id ORDER BY m.created",
                     (project_id, "shared", personal if channel == "personal" else "shared"),
                 )
                 events = self.all(
@@ -842,9 +860,6 @@ class Store:
             (state, result[-80_000:], encoded(evidence), time.time(), t["id"]),
         )
         self.event(t["project_id"], t["id"], state, result[-8000:] or state)
-        self.db.execute(
-            "INSERT INTO messages VALUES(?,?,?,?,?,?)",
-            (uid(), t["project_id"], t["title"], result[-20_000:], t["channel"], time.time()),
-        )
+        self.save_message(uid(), t["project_id"], t["title"], result[-20_000:], t["channel"], time.time())
         self.reconcile(t["project_id"], t["channel"])
         return {"status": state}

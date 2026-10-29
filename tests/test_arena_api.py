@@ -765,6 +765,37 @@ def test_agent_can_search_and_page_older_conversation_without_leaking_private_me
     assert {message["id"] for message in private_results} == {"private", "history000"}
 
 
+def test_long_new_messages_are_compressed_without_losing_search_or_full_text(arena):
+    client, store = arena
+    p = project(client)
+    content = "界面偏好" * 3000 + "唯一检索词"
+    sent = client.post(f'/api/projects/{p["id"]}/messages', json={"content": content})
+    assert sent.status_code == 201, sent.text
+    message_id = sent.json()["id"]
+    row = store.one(
+        "SELECT m.content,p.payload FROM messages m LEFT JOIN message_payloads p ON p.message_id=m.id WHERE m.id=?",
+        (message_id,),
+    )
+    assert row["payload"] is not None and len(row["payload"]) < len(content.encode("utf-8")) // 10
+    assert len(row["content"]) == 512
+    machine_auth, _ = machine(client, roles=["leader"])
+    _, auth = claim(client, machine_auth)
+    history = client.get("/api/runs/history", headers=auth, params={"q": "唯一检索词"}).json()["messages"]
+    assert history[0]["id"] == message_id and history[0]["truncated"]
+    assert client.get("/api/runs/history/" + message_id, headers=auth).json()["content"] == content
+    assert (
+        next(m for m in client.get("/api/runs/context", headers=auth).json()["messages"] if m["id"] == message_id)[
+            "content"
+        ]
+        == content
+    )
+    reply = "回复内容" * 2000
+    assert client.post("/api/runs/complete", headers=auth, json={"result": reply}).status_code == 200
+    messages = client.get("/api/state", params={"project_id": p["id"]}).json()["messages"]
+    assert messages[-1]["content"] == reply
+    assert store.one("SELECT COUNT(*) AS count FROM message_payloads")["count"] == 2
+
+
 def test_personal_conversation_automatically_saves_only_personal_memory(arena):
     client, _ = arena
     p = project(client)

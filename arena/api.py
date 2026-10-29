@@ -975,10 +975,7 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
                 return previous
             message_id = uid()
             channel = f'personal:{actor["id"]}' if data.channel == "personal" else "shared"
-            store.db.execute(
-                "INSERT INTO messages VALUES(?,?,?,?,?,?)",
-                (message_id, project_id, actor["name"], data.content, channel, time.time()),
-            )
+            store.save_message(message_id, project_id, actor["name"], data.content, channel, time.time())
             task = store.create_task(
                 project_id,
                 "回应并协调 · " + data.content[:60],
@@ -1479,12 +1476,13 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
                 where += " AND (created<? OR (created=? AND id<?))"
                 params.extend((cursor["created"], cursor["created"], cursor["id"]))
             if q.strip():
-                where += " AND instr(lower(content),lower(?))>0"
+                where += " AND instr(lower(COALESCE(arena_message_text(p.payload),m.content)),lower(?))>0"
                 params.append(q.strip())
             rows = store.all(
-                "SELECT id,author,content,channel,created FROM messages WHERE "
+                "SELECT m.id,m.author,COALESCE(arena_message_text(p.payload),m.content) AS content,m.channel,m.created "
+                "FROM messages m LEFT JOIN message_payloads p ON p.message_id=m.id WHERE "
                 + where
-                + " ORDER BY created DESC,id DESC LIMIT ?",
+                + " ORDER BY m.created DESC,m.id DESC LIMIT ?",
                 (*params, limit + 1),
             )
             messages = rows[:limit]
@@ -1499,8 +1497,9 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
             task, _ = run(request)
             personal = task["channel"] if task["channel"] != "shared" else "shared"
             message = store.one(
-                "SELECT id,author,content,channel,created FROM messages "
-                "WHERE id=? AND project_id=? AND channel IN (?,?)",
+                "SELECT m.id,m.author,COALESCE(arena_message_text(p.payload),m.content) AS content,m.channel,m.created "
+                "FROM messages m LEFT JOIN message_payloads p ON p.message_id=m.id "
+                "WHERE m.id=? AND m.project_id=? AND m.channel IN (?,?)",
                 (message_id, task["project_id"], "shared", personal),
             )
             if message is None:
