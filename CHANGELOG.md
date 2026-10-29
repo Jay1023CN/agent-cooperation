@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.11.2 (2026-10-29)
+
+### Bug Fixes
+
+- **release**: 发布时同步运行版本号
+  ([`c535102`](https://github.com/Jay1023CN/agent-cooperation/commit/c535102eaaa28c2acd28c142e7cf649489393357))
+
+
 ## v1.11.1 (2026-10-29)
 
 ### Bug Fixes
