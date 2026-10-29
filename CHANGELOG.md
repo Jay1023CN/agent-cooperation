@@ -2,6 +2,47 @@
 
 <!-- version list -->
 
+## v1.18.0 (2026-10-29)
+
+### Bug Fixes
+
+- 整合工作台界面与频道摘要
+  ([`a0bd2a4`](https://github.com/Jay1023CN/agent-cooperation/commit/a0bd2a4be5c8a3e79d0104967c5703f937c8960b))
+
+- **arena**: 隔离记忆来源并跳过过期摘要
+  ([`faa695a`](https://github.com/Jay1023CN/agent-cooperation/commit/faa695a69430865f5f71ad9297736acbda2608e5))
+
+- **storage**: 完善兼容隐私与确认清理流程
+  ([`6966e67`](https://github.com/Jay1023CN/agent-cooperation/commit/6966e676ccb1318b288cc6d5d7d15c1608ded1ce))
+
+- **worker**: 显示可操作的连接与任务失败原因
+  ([`e2f982c`](https://github.com/Jay1023CN/agent-cooperation/commit/e2f982ccced4b6ee73b6b60dd88a576ffad20c65))
+
+### Continuous Integration
+
+- 收紧发布前核心验证矩阵
+  ([`8809396`](https://github.com/Jay1023CN/agent-cooperation/commit/88093968d40238cf3e4454244cefbfeebd367c3b))
+
+### Documentation
+
+- 更新 v1.17.0 下载和自动摘要说明 [skip ci]
+  ([`dac645e`](https://github.com/Jay1023CN/agent-cooperation/commit/dac645e366bd090097a47febe2c7224d0d8299db))
+
+### Features
+
+- 接入记忆摘要与存储管理工作台
+  ([`7ffb4c3`](https://github.com/Jay1023CN/agent-cooperation/commit/7ffb4c34ddc98e928fa9ed3041643ebf7adaa376))
+
+- **arena**: 增加记忆来源与对话摘要维护接口
+  ([`d700ad5`](https://github.com/Jay1023CN/agent-cooperation/commit/d700ad50606757a2b9d974d2a6458af0120f5ffc))
+
+- **storage**: 增加存储统计与工作区预览
+  ([`efbe3d8`](https://github.com/Jay1023CN/agent-cooperation/commit/efbe3d8598999984d3bae75169dcfdcec34bfc4c))
+
+- **ui**: 频道、记忆和成果存储改用调度台视觉
+  ([`28d22eb`](https://github.com/Jay1023CN/agent-cooperation/commit/28d22eb5eb2d41c47a01ea36261f48054bf1f427))
+
+
 ## v1.17.0 (2026-10-29)
 
 ### 修复
