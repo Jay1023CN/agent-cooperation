@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.13.0 (2026-10-29)
+
+### Documentation
+
+- 更新 v1.12.0 下载与任务看板说明 [skip ci]
+  ([`cee7a83`](https://github.com/Jay1023CN/agent-cooperation/commit/cee7a8302217f28b601202a5598a0b204424ef5a))
+
+### Features
+
+- 完善桌面任务协作与 Blender 产物检查
+  ([`c714d35`](https://github.com/Jay1023CN/agent-cooperation/commit/c714d3544ad99488a6d0c410046846afc49480cb))
+
+
 ## v1.12.0 (2026-10-29)
 
 ### 文档
