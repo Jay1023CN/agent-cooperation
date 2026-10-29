@@ -24,7 +24,8 @@ import { request, makeRequestId } from './lib/api.js';
 import { renderTasks, renderReviews, renderFiles, renderLogs } from './views/workspace.js';
 import { renderMemories } from './views/memory.js';
 import {
-  providerInfo,
+  updateSetupAgent,
+  updateSetupPlatform,
   setupAgentRow,
   machineSetupHTML,
   collectWorkerConfig,
@@ -589,7 +590,7 @@ function renderInviteResult(invite) {
   openModal(
     machine ? '连接执行电脑' : '邀请伙伴加入',
     `${invite.name} · 令牌仅在这里显示一次`,
-    `<p class="muted small">${machine ? '将令牌设置为执行电脑上的 ARENA_MACHINE_TOKEN 环境变量。不要放进项目仓库或聊天记录。' : '把专属令牌交给伙伴，用工作台登录页进入。'}</p><div class="token-box" id="invite-token"></div><div class="modal-actions"><button type="button" class="button" data-action="copy-token">${icon('copy')} 复制令牌</button></div>${machine ? machineSetupHTML(invite, networkAddress) : ''}<div class="modal-actions"><button class="button primary" type="button" data-action="close-modal">我已保存</button></div>`,
+    `<p class="muted small">${machine ? '这台电脑单独使用此令牌。先保存，再生成配置和启动命令。' : '把专属令牌交给伙伴，用工作台登录页进入。'}</p><div class="token-box" id="invite-token"></div><div class="modal-actions"><button type="button" class="button" data-action="copy-token">${icon('copy')} 复制令牌</button></div>${machine ? machineSetupHTML(invite, networkAddress) : ''}<div class="modal-actions"><button class="button primary" type="button" data-action="close-modal">我已保存</button></div>`,
   );
   dialogSecret = { ...invite };
   $('#invite-token').textContent = invite.token;
@@ -842,6 +843,9 @@ $('#modal').addEventListener('click', (event) => {
       closeModal();
   }
 });
+document.addEventListener('input', (event) => {
+  if (event.target.closest('.machine-setup')) $('#worker-command-output').hidden = true;
+});
 document.addEventListener('change', (event) => {
   if (['auto_merge', 'auto_deploy'].includes(event.target.name) && event.target.checked) {
     const form = event.target.closest('form');
@@ -867,10 +871,14 @@ document.addEventListener('change', (event) => {
     updateTaskAgentOptions();
     return;
   }
+  if (event.target.closest('.machine-setup')) {
+    $('#worker-command-output').hidden = true;
+    if (['setup-os', 'setup-install'].includes(event.target.id)) updateSetupPlatform();
+    const row = event.target.closest('[data-agent-row]');
+    if (row) updateSetupAgent(row);
+  }
   const select = event.target.closest('[data-provider-row]');
   if (!select) return;
-  const note = $(`[data-provider-note="${select.dataset.providerRow}"]`);
-  if (note) note.textContent = providerInfo[select.value].note;
   if (select.value === 'desktop_mcp') {
     $('#setup-slots').value = '1';
     const root = $('#setup-root');
@@ -1137,13 +1145,16 @@ document.addEventListener('click', async (event) => {
         toast('启动命令已复制，令牌仍需自行替换。');
       } else toast('请手动选择并复制上方命令。');
     } else if (action === 'add-config-agent') {
+      $('#worker-command-output').hidden = true;
       const indexes = $$('[data-agent-row]').map((row) => Number(row.dataset.agentRow));
       $('#setup-agents').insertAdjacentHTML(
         'beforeend',
         setupAgentRow(indexes.length ? Math.max(...indexes) + 1 : 0),
       );
-    } else if (action === 'remove-config-agent') button.closest('[data-agent-row]').remove();
-    else if (action === 'rotate-identity' && editable()) {
+    } else if (action === 'remove-config-agent') {
+      $('#worker-command-output').hidden = true;
+      button.closest('[data-agent-row]').remove();
+    } else if (action === 'rotate-identity' && editable()) {
       const item = teamIdentities.find((value) => value.id === button.dataset.id);
       if (!item) return;
       confirmAction(

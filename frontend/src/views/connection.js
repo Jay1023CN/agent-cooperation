@@ -54,32 +54,117 @@ export const providerInfo = {
   },
 };
 export function setupAgentRow(index, value = {}) {
-  const provider = value.provider || 'qoder';
-  return `<section class="setup-agent" data-agent-row="${index}"><div class="setup-agent-top"><strong>成员 ${index + 1}</strong><label class="check-field"><input type="checkbox" name="enabled-${index}" ${value.enabled ? 'checked' : ''}>启用已安装的客户端</label><button type="button" class="icon-button" data-action="remove-config-agent" data-index="${index}" aria-label="移除成员 ${index + 1}">${icon('close')}</button></div><div class="form-row"><div class="field"><label>接入方式<select name="provider-${index}" data-provider-row="${index}">${Object.entries(
-    providerInfo,
-  )
-    .map(
-      ([key, item]) =>
-        `<option value="${key}" ${provider === key ? 'selected' : ''} ${item.unavailable ? 'disabled' : ''}>${item.label}</option>`,
+  const provider = Object.hasOwn(providerInfo, value.provider) ? value.provider : 'qoder';
+  const info = providerInfo[provider];
+  const profile = value.routing_profile || {};
+  const existing = info.existing && value.mode === 'existing';
+  return `<section class="setup-agent" data-agent-row="${index}">
+    <div class="setup-agent-top"><strong>${icon('terminal')} 成员 ${index + 1}</strong><label class="check-field"><input type="checkbox" name="enabled-${index}" ${value.enabled ? 'checked' : ''}>启用</label><button type="button" class="icon-button" data-action="remove-config-agent" data-index="${index}" aria-label="移除成员 ${index + 1}">${icon('close')}</button></div>
+    <div class="form-row"><div class="field"><label>客户端<select name="provider-${index}" data-provider-row="${index}">${Object.entries(
+      providerInfo,
     )
-    .join(
-      '',
-    )}</select></label></div><div class="field"><label>角色<select name="role-${index}">${['worker', 'leader', 'reviewer'].map((role) => `<option value="${role}" ${value.role === role ? 'selected' : ''}>${roleLabels[role]}</option>`).join('')}</select></label></div></div><p class="provider-explanation" data-provider-note="${index}">${e(providerInfo[provider].note)}</p><div class="form-row"><div class="field"><label>显示名称<input name="agent-name-${index}" placeholder="留空则按接入方式和角色命名" value="${e(value.name || '')}"></label></div><div class="field"><label>模型 ID<input name="model-${index}" placeholder="可选；Antigravity 必填" value="${e(value.model || '')}"></label></div></div><div class="field"><label>能力（英文逗号分隔）<input name="capabilities-${index}" value="${e(value.capabilities || 'code, web, docs, research, debug')}"></label><small>可选 code、web、docs、research、debug、blender、planning。负责人会自动加入 planning。</small></div><details><summary>模型调度偏好</summary><div class="form-row">${[
-    ['quality', '质量'],
-    ['speed', '速度'],
-    ['economy', '性价比'],
-  ]
-    .map(
-      ([key, label]) =>
-        `<div class="field"><label>${label}偏好（1—5）<input type="number" name="${key}-${index}" min="1" max="5" value="3"></label></div>`,
-    )
-    .join(
-      '',
-    )}<div class="field"><label>最高承接难度<select name="max-difficulty-${index}"><option value="routine">常规</option><option value="standard">标准</option><option value="deep" selected>深入</option></select></label></div></div><div class="form-row"><div class="field"><label>上下文容量<input type="number" name="context-window-${index}" min="1" max="10000000" placeholder="未声明"></label></div><div class="field"><label>订阅额度状态<select name="quota-${index}"><option value="unknown">未知</option><option value="available">自行确认可用</option><option value="limited">额度紧张</option><option value="exhausted">已耗尽，暂停分派</option></select></label></div></div><p class="provider-explanation">这些是你对模型的偏好声明，结合任务难度和实际运行记录使用；平台不估算订阅的真实价格或剩余额度。</p></details><details><summary>已有桌面会话与可执行路径</summary><div class="field"><label>会话模式<select name="mode-${index}"><option value="new">新建任务会话</option><option value="existing">接续指定桌面会话（仅支持的适配器）</option></select></label></div><div class="field"><label>已有会话 ID<input name="session-${index}" placeholder="接续已有会话时必填"></label></div><div class="field"><label>已有会话的绝对工作目录<input name="workspace-${index}" placeholder="该会话实际使用的本机目录"></label></div><div class="field"><label>可执行文件路径<input name="command-${index}" placeholder="可选：不在 PATH 中时填写完整路径"></label></div><div class="field"><label>DSH ACP profile（仅 DSH 使用）<input name="dsh-profile-${index}" value="${e(value.adapter?.profile || '')}" placeholder="acp"></label><small>填写已配置模型的 ACP profile 名称；留空使用 acp。</small></div></details></section>`;
+      .filter(([key, item]) => !item.unavailable || key === provider)
+      .map(
+        ([key, item]) =>
+          `<option value="${key}" ${provider === key ? 'selected' : ''} ${item.unavailable ? 'disabled' : ''}>${item.label}</option>`,
+      )
+      .join(
+        '',
+      )}</select></label></div><div class="field"><label>负责什么<select name="role-${index}">${['worker', 'leader', 'reviewer'].map((role) => `<option value="${role}" ${value.role === role || value.roles?.includes(role) ? 'selected' : ''}>${roleLabels[role]}</option>`).join('')}</select></label></div></div>
+    <p class="provider-explanation" data-provider-note="${index}">${e(info.note)}</p>
+    <div class="form-row"><div class="field"><label>成员名称<input name="agent-name-${index}" placeholder="留空则自动命名" value="${e(value.name || '')}"></label></div><div class="field"><label><span data-model-label>${provider === 'antigravity' ? '模型 ID（必填）' : '模型 ID（可选）'}</span><input name="model-${index}" placeholder="使用客户端的默认模型" value="${e(value.model || '')}"></label></div></div>
+    <div class="field" data-provider-field="dsh" ${provider === 'dsh' ? '' : 'hidden'}><label>DSH ACP profile<input name="dsh-profile-${index}" value="${e(value.adapter?.profile || '')}" placeholder="acp"></label><small>填写已配置模型路由的 profile；留空使用 acp。</small></div>
+    <details><summary>能力与调度偏好</summary><div class="field"><label>能做什么<input name="capabilities-${index}" value="${e(Array.isArray(value.capabilities) ? value.capabilities.join(', ') : value.capabilities || 'code, web, docs, research, debug')}"></label><small>用英文逗号分隔：code、web、docs、research、debug、blender、planning。</small></div>
+      <div class="form-row">${[
+        ['quality', '质量'],
+        ['speed', '速度'],
+        ['economy', '性价比'],
+      ]
+        .map(
+          ([key, label]) =>
+            `<div class="field"><label>${label}偏好（1—5）<input type="number" name="${key}-${index}" min="1" max="5" value="${e(profile[key] || 3)}"></label></div>`,
+        )
+        .join('')}</div>
+      <div class="form-row"><div class="field"><label>最高承接难度<select name="max-difficulty-${index}">${[
+        ['routine', '常规'],
+        ['standard', '标准'],
+        ['deep', '深入'],
+      ]
+        .map(
+          ([key, label]) =>
+            `<option value="${key}" ${(profile.max_difficulty || 'deep') === key ? 'selected' : ''}>${label}</option>`,
+        )
+        .join(
+          '',
+        )}</select></label></div><div class="field"><label>上下文容量<input type="number" name="context-window-${index}" min="1" max="10000000" placeholder="未声明" value="${e(profile.context_window || '')}"></label></div></div>
+      <div class="field"><label>订阅额度<select name="quota-${index}">${[
+        ['unknown', '未知'],
+        ['available', '自行确认可用'],
+        ['limited', '额度紧张'],
+        ['exhausted', '已耗尽，暂停分派'],
+      ]
+        .map(
+          ([key, label]) =>
+            `<option value="${key}" ${(profile.quota_state || 'unknown') === key ? 'selected' : ''}>${label}</option>`,
+        )
+        .join('')}</select></label><small>用于安排任务；平台不会估算订阅的真实剩余额度。</small></div>
+    </details>
+    <details><summary>${info.existing ? '可执行路径与已有会话' : '自定义可执行路径'}</summary>
+      <div class="field"><label>可执行文件<input name="command-${index}" value="${e(value.command?.[0] || '')}" placeholder="可选：客户端不在 PATH 中时填写完整路径"></label></div>
+      <div data-provider-field="existing" ${info.existing ? '' : 'hidden'}><div class="field"><label>会话模式<select name="mode-${index}" data-session-mode><option value="new" ${existing ? '' : 'selected'}>新建任务会话</option><option value="existing" ${existing ? 'selected' : ''}>接续指定桌面会话</option></select></label></div>
+      <div data-session-fields ${existing ? '' : 'hidden'}><div class="field"><label>已有会话 ID<input name="session-${index}" value="${e(value.session_id || '')}" placeholder="接续时必填"></label></div><div class="field"><label>该会话的绝对工作目录<input name="workspace-${index}" value="${e(value.workspace || '')}" placeholder="该会话实际使用的本机目录"></label></div></div></div>
+    </details>
+  </section>`;
+}
+export function updateSetupAgent(row) {
+  const index = row.dataset.agentRow;
+  const provider = row.querySelector('[data-provider-row]').value;
+  const info = providerInfo[provider];
+  row.querySelector('[data-provider-note]').textContent = info.note;
+  row.querySelector('[data-model-label]').textContent =
+    provider === 'antigravity' ? '模型 ID（必填）' : '模型 ID（可选）';
+  row.querySelectorAll('[data-provider-field]').forEach((field) => {
+    field.hidden =
+      field.dataset.providerField === 'existing' ? !info.existing : provider !== field.dataset.providerField;
+  });
+  row.querySelector('[data-session-fields]').hidden =
+    !info.existing || row.querySelector(`[name="mode-${index}"]`).value !== 'existing';
+  row.querySelectorAll('details')[1].querySelector('summary').textContent = info.existing
+    ? '可执行路径与已有会话'
+    : '自定义可执行路径';
+}
+export function updateSetupPlatform() {
+  const linux = $('#setup-os').value === 'linux';
+  const install = $('#setup-install');
+  install.querySelector('[value="native"]').disabled = linux;
+  if (linux) install.value = 'source';
+  $('#setup-platform-hint').textContent =
+    install.value === 'native'
+      ? 'Windows x64 / Apple Silicon Mac 使用原生包，无需安装 Python。'
+      : '在已安装 .[platform] 依赖的源码目录中运行，使用 .pal_venv 虚拟环境。';
 }
 export function machineSetupHTML(invite, address = null) {
   const server = address?.state === 'shared' && address.url ? address.url : location.origin;
-  return `<div class="detail-section"><h3>生成这台电脑的配置</h3><div class="field"><label for="setup-server">中心地址</label><input name="setup_server" id="setup-server" type="url" required value="${e(server)}"><small>其他电脑填写中心的 Tailscale HTTPS 地址；127.0.0.1 只适用于中心那台电脑自己。</small></div><div class="form-row"><div class="field"><label for="setup-slots">并发上限</label><input name="setup_slots" id="setup-slots" type="number" min="1" max="8" value="2"></div><div class="field"><label for="setup-os">命令格式</label><select name="setup_os" id="setup-os"><option value="mac">Mac / Linux 终端</option><option value="windows">Windows PowerShell</option></select></div></div><div class="field"><label for="setup-root">本机工作目录</label><input name="setup_root" id="setup-root" value="~/.pal-arena/workspaces"></div><div id="setup-agents">${setupAgentRow(0, { provider: 'qoder', role: 'worker' })}</div><button class="button small" type="button" data-action="add-config-agent">+ 添加另一个成员</button><div class="notice">至少启用一个本机已安装的客户端。可以在不同电脑上分别安排负责人、执行成员与验收成员。配置文件不含令牌。</div><div class="setup-actions"><button class="button primary" type="button" data-action="download-config">下载 worker.json</button><button class="button" type="button" data-action="show-worker-commands">查看启动命令</button></div><div id="worker-command-output" class="detail-section" hidden><h3>启动与检查</h3><pre id="worker-command-text"></pre><button class="button small" type="button" data-action="copy-commands">复制启动命令</button><p class="muted small" id="worker-command-hint">令牌在命令中以占位文字显示，请替换为上面的专属令牌。实际令牌不会写入下载文件。</p></div></div>`;
+  const platform = globalThis.navigator?.userAgent || '';
+  const os = /Windows/i.test(platform) ? 'windows' : /Linux/i.test(platform) ? 'linux' : 'mac';
+  return `<div class="machine-setup">
+    <section class="setup-section"><div class="setup-section-heading"><span>1</span><div><h3>选择接入环境</h3><p>在准备接入的那台电脑上运行。</p></div></div>
+      <div class="form-row"><div class="field"><label for="setup-os">电脑系统</label><select name="setup_os" id="setup-os">${[
+        ['windows', 'Windows'],
+        ['mac', 'macOS'],
+        ['linux', 'Linux'],
+      ]
+        .map(([key, label]) => `<option value="${key}" ${os === key ? 'selected' : ''}>${label}</option>`)
+        .join(
+          '',
+        )}</select></div><div class="field"><label for="setup-install">运行方式</label><select name="setup_install" id="setup-install"><option value="native" ${os === 'linux' ? 'disabled' : 'selected'}>原生安装包</option><option value="source" ${os === 'linux' ? 'selected' : ''}>源码环境</option></select></div></div>
+      <p class="provider-explanation" id="setup-platform-hint">${os === 'linux' ? '在已安装 .[platform] 依赖的源码目录中运行，使用 .pal_venv 虚拟环境。' : 'Windows x64 / Apple Silicon Mac 使用原生包，无需安装 Python。'}</p>
+      <div class="field"><label for="setup-server">中心地址</label><input name="setup_server" id="setup-server" type="url" required value="${e(server)}"><small>其他电脑填写中心的 Tailscale 或 HTTPS 地址；127.0.0.1 仅用于本机。</small></div>
+      <details class="setup-machine-options"><summary>工作目录与并发</summary><div class="field"><label for="setup-root">本机工作目录</label><input name="setup_root" id="setup-root" value="~/.pal-arena/workspaces"></div><div class="field"><label for="setup-slots">同时运行的任务数</label><input name="setup_slots" id="setup-slots" type="number" min="1" max="8" value="2"></div></details>
+    </section>
+    <section class="setup-section"><div class="setup-section-heading"><span>2</span><div><h3>安排这台电脑的成员</h3><p>选择已安装并登录的客户端，再勾选启用。</p></div></div><div id="setup-agents">${setupAgentRow(0, { provider: 'qoder', role: 'worker' })}</div><button class="button small setup-add" type="button" data-action="add-config-agent">${icon('plus')} 添加成员</button></section>
+    <section class="setup-section setup-launch"><div class="setup-section-heading"><span>3</span><div><h3>保存配置，启动接入</h3><p>配置文件不含令牌；启动时填入这台电脑的专属令牌。</p></div></div><div class="setup-actions"><button class="button primary" type="button" data-action="download-config">${icon('download')} 下载 worker.json</button><button class="button" type="button" data-action="show-worker-commands">查看启动命令</button></div><div id="worker-command-output" class="setup-command" hidden><div class="setup-command-heading"><strong>${icon('terminal')} 启动与检查</strong><button class="button small" type="button" data-action="copy-commands">复制命令</button></div><pre id="worker-command-text"></pre><p class="muted small" id="worker-command-hint"></p></div></section>
+  </div>`;
 }
 export function collectWorkerConfig(name = 'My computer') {
   const form = new FormData($('#modal-form'));
@@ -112,12 +197,12 @@ export function collectWorkerConfig(name = 'My computer') {
       role = form.get(`role-${i}`),
       model = String(form.get(`model-${i}`) || '').trim();
     const enabled = form.get(`enabled-${i}`) === 'on',
-      mode = form.get(`mode-${i}`),
       info = providerInfo[provider];
+    if (!info) throw new Error('请选择可用的客户端。');
+    const mode = info.existing ? form.get(`mode-${i}`) || 'new' : 'new';
     if (enabled && info.unavailable) throw new Error(`${info.label} 当前不能可靠判断任务完成，暂不可启用。`);
     if (enabled && provider === 'antigravity' && !model)
       throw new Error('Antigravity 成员需要填写本机实际可用的模型 ID。');
-    if (mode === 'existing' && !info.existing) throw new Error(`${info.label} 当前不能接管已有桌面会话。`);
     const caps = String(form.get(`capabilities-${i}`) || '')
       .split(',')
       .map((v) => v.trim())
@@ -187,24 +272,35 @@ export function collectWorkerConfig(name = 'My computer') {
     agents,
   };
 }
-export function showWorkerCommands(name) {
-  const config = collectWorkerConfig(name);
-  if (config.agents[0].provider === 'desktop_mcp') {
-    $('#worker-command-text').textContent =
-      'pal-arena internal-desktop-mcp --config worker.json --token-file "<令牌文件路径>" --print-mcp-config\n' +
-      '源码安装时：python -m arena.desktop_mcp --config worker.json --token-file "<令牌文件路径>" --print-mcp-config';
-    $('#worker-command-hint').textContent =
-      '先将专属令牌单独保存到本机文件并替换路径；将输出的 MCP 配置加入 WorkBuddy，然后在共享会话中主动调用 next_task。';
-    $('#worker-command-output').hidden = false;
-    return;
-  }
-  const windows = $('#setup-os').value === 'windows';
-  const command = windows
+export function workerCommands(config, os, install) {
+  if (!['windows', 'mac', 'linux'].includes(os) || !['native', 'source'].includes(install))
+    throw new Error('请选择电脑系统和运行方式。');
+  if (os === 'linux' && install === 'native') throw new Error('Linux 请使用源码环境。');
+  const windows = os === 'windows';
+  const native = windows ? '.\\pal-arena\\pal-arena.exe' : './pal-arena/pal-arena';
+  const python = windows ? '.\\.pal_venv\\Scripts\\python.exe' : './.pal_venv/bin/python';
+  const desktop = config.agents.some((agent) => agent.provider === 'desktop_mcp');
+  if (desktop)
+    return {
+      command: `${install === 'native' ? native + ' internal-desktop-mcp' : python + ' -m arena.desktop_mcp'} --config worker.json --token-file "<令牌文件路径>" --print-mcp-config`,
+      hint: '将专属令牌单独保存为本机文件，替换上面的路径。把生成的 MCP 配置加入 WorkBuddy，再在共享会话中调用 next_task。',
+    };
+  const token = windows
     ? "$env:ARENA_MACHINE_TOKEN = '<电脑专属令牌>'"
     : "export ARENA_MACHINE_TOKEN='<电脑专属令牌>'";
-  $('#worker-command-text').textContent =
-    `${command}\npal-arena doctor --config worker.json\npython -m arena.worker --config worker.json`;
-  $('#worker-command-hint').textContent =
-    '令牌在命令中以占位文字显示，请替换为上面的专属令牌。实际令牌不会写入下载文件。';
+  const doctor = install === 'native' ? native : python + ' -m arena';
+  const worker = install === 'native' ? native + ' worker' : python + ' -m arena.worker';
+  return {
+    command: `${token}\n${doctor} doctor --config worker.json\n${worker} --config worker.json`,
+    hint:
+      install === 'native'
+        ? '在解压后的安装包目录运行。将令牌占位文字换成这台电脑的专属令牌，worker.json 也放在这个目录。'
+        : '在已安装 .[platform] 依赖的源码目录运行。将令牌占位文字替换后，依次检查并启动。',
+  };
+}
+export function showWorkerCommands(name) {
+  const result = workerCommands(collectWorkerConfig(name), $('#setup-os').value, $('#setup-install').value);
+  $('#worker-command-text').textContent = result.command;
+  $('#worker-command-hint').textContent = result.hint;
   $('#worker-command-output').hidden = false;
 }
