@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.16.0 (2026-10-29)
+
+### Features
+
+- 无损压缩长对话以节省存储
+  ([`8fdea60`](https://github.com/Jay1023CN/agent-cooperation/commit/8fdea605cefcd5d1f07213a46a3f41b95aea4cbd))
+
+
 ## v1.15.0 (2026-10-29)
 
 ### Features
