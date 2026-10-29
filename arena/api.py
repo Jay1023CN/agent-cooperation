@@ -182,6 +182,9 @@ class Registration(Input):
     slots: int = Field(default=1, ge=1, le=16)
     agents: list[Agent] = Field(default_factory=list, max_length=32)
     storage_bytes: int = Field(default=0, ge=0)
+    storage_limit_bytes: int | None = Field(default=None, ge=1)
+    disk_total_bytes: int | None = Field(default=None, ge=0)
+    disk_free_bytes: int | None = Field(default=None, ge=0)
     github_members: list[GitHubMember] = Field(default_factory=list, max_length=16)
 
     @field_validator("github_members")
@@ -201,6 +204,9 @@ class Registration(Input):
 
 class Heartbeat(Input):
     storage_bytes: int = Field(default=0, ge=0)
+    storage_limit_bytes: int | None = Field(default=None, ge=1)
+    disk_total_bytes: int | None = Field(default=None, ge=0)
+    disk_free_bytes: int | None = Field(default=None, ge=0)
 
 
 class WorkspaceAttempt(Input):
@@ -210,6 +216,39 @@ class WorkspaceAttempt(Input):
 
 class WorkspaceStatus(Input):
     tasks: list[WorkspaceAttempt] = Field(default_factory=list, max_length=100)
+
+
+class CleanupPreviewCreate(Input):
+    machine_id: str = Field(min_length=1, max_length=64, pattern=r"^[a-f0-9]+$")
+    keep: int = Field(default=3, ge=1, le=100)
+
+
+class CleanupPreviewItem(Input):
+    project_id: str = Field(min_length=1, max_length=80, pattern=r"^[A-Za-z0-9_-]+$")
+    task_id: str = Field(min_length=1, max_length=80, pattern=r"^[A-Za-z0-9_-]+$")
+    attempt: int = Field(ge=1)
+    bytes: int = Field(default=0, ge=0)
+    updated: float = 0
+    reason: str = Field(max_length=500)
+
+    @field_validator("reason")
+    @classmethod
+    def safe_reason(cls, value):
+        if any(character in value for character in "\\/\r\n\x00"):
+            return "执行端返回的检查说明已隐藏；工作区已保留"
+        if any(len(part) > 80 for part in re.split(r"[^A-Za-z0-9_-]", value)):
+            return "执行端返回的检查说明已隐藏；工作区已保留"
+        return value
+
+
+class CleanupPreviewCompletion(Input):
+    status: Literal["complete", "failed"]
+    candidates: list[CleanupPreviewItem] = Field(default_factory=list, max_length=2000)
+    preserved: list[CleanupPreviewItem] = Field(default_factory=list, max_length=5000)
+    reclaimable_bytes: int = Field(default=0, ge=0)
+    candidate_count: int = Field(default=0, ge=0)
+    preserved_count: int = Field(default=0, ge=0)
+    error: str = Field(default="", max_length=500)
 
 
 class Log(Input):
@@ -439,7 +478,11 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
         size = request.headers.get("content-length")
         if size:
             try:
-                limit = MAX_ARTIFACT_BYTES if request.url.path.endswith("/artifacts") else 1_000_000
+                limit = (
+                    MAX_ARTIFACT_BYTES
+                    if request.url.path.endswith("/artifacts")
+                    else 4_000_000 if "/workspaces/cleanup-previews/" in request.url.path else 1_000_000
+                )
                 if int(size) < 0 or int(size) > limit:
                     return JSONResponse({"detail": "请求过大"}, status_code=413)
             except ValueError:
@@ -908,6 +951,24 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
         snapshot = store.snapshot(project_id, channel, actor["id"])
         snapshot["projects"] = [project_view(project) for project in snapshot["projects"]]
         return snapshot
+
+    @app.get("/api/storage")
+    def storage_status(request: Request):
+        with store.tx():
+            identity(request)
+            center = store.storage_report()
+            machines = store.all(
+                "SELECT id,name,seen,storage_bytes,storage_limit_bytes,disk_total_bytes,"
+                "disk_free_bytes,storage_measured FROM machines ORDER BY name"
+            )
+            for machine in machines:
+                machine["online"] = machine["seen"] > time.time() - 45
+                machine["storage_state"] = store.machine_storage_state(machine)
+            return {
+                "center": center,
+                "machines": machines,
+                "measured_at": time.time(),
+            }
 
     def check_commit_identity(policy: dict):
         member = policy.get("commit_as")
@@ -1415,6 +1476,9 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
                 [a.model_dump(exclude_none=True) for a in data.agents],
                 data.storage_bytes,
                 [item.model_dump() for item in data.github_members],
+                data.storage_limit_bytes,
+                data.disk_total_bytes,
+                data.disk_free_bytes,
             )
         return {"machine_id": actor["id"], "agents": agents}
 
@@ -1426,7 +1490,17 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
             if not store.one("SELECT id FROM machines WHERE id=?", (actor["id"],)):
                 raise Conflict("先注册执行电脑")
             store.db.execute(
-                "UPDATE machines SET seen=?,storage_bytes=? WHERE id=?", (time.time(), data.storage_bytes, actor["id"])
+                "UPDATE machines SET seen=?,storage_bytes=?,storage_limit_bytes=?,disk_total_bytes=?,"
+                "disk_free_bytes=?,storage_measured=? WHERE id=?",
+                (
+                    time.time(),
+                    data.storage_bytes,
+                    data.storage_limit_bytes,
+                    data.disk_total_bytes,
+                    data.disk_free_bytes,
+                    time.time() if data.storage_limit_bytes is not None and data.disk_free_bytes is not None else None,
+                    actor["id"],
+                ),
             )
         return {"status": "online"}
 
@@ -1471,6 +1545,110 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
                         }
                     )
         return {"tasks": records}
+
+    def expire_cleanup_previews():
+        now = time.time()
+        store.db.execute(
+            "UPDATE workspace_cleanup_previews SET status='expired',updated=? " "WHERE status='pending' AND created<?",
+            (now, now - 900),
+        )
+        store.db.execute(
+            "UPDATE workspace_cleanup_previews SET status='expired',updated=? " "WHERE status='running' AND updated<?",
+            (now, now - 3600),
+        )
+
+    @app.post("/api/workspaces/cleanup-previews", status_code=202)
+    def workspace_cleanup_preview_create(data: CleanupPreviewCreate, request: Request):
+        with store.tx():
+            actor = identity(request, "member")
+            machine = store.one("SELECT id,seen FROM machines WHERE id=?", (data.machine_id,))
+            if not machine:
+                raise HTTPException(404, "执行电脑不存在")
+            if machine["seen"] < time.time() - 45:
+                raise Conflict("执行电脑当前离线；上线后再请求工作区预览")
+            expire_cleanup_previews()
+            request_id = uid()
+            now = time.time()
+            store.db.execute(
+                "INSERT INTO workspace_cleanup_previews(id,machine_id,requested_by,keep,status,created,updated) "
+                "VALUES(?,?,?,?,?,?,?)",
+                (request_id, data.machine_id, actor["id"], data.keep, "pending", now, now),
+            )
+            return {
+                "id": request_id,
+                "status": "pending",
+                "message": "已排队；执行电脑完成本地扫描和 GitHub 同步核验后才会显示候选。",
+            }
+
+    @app.get("/api/workspaces/cleanup-previews/{preview_id}")
+    def workspace_cleanup_preview_read(preview_id: str, request: Request):
+        with store.tx():
+            identity(request, "member")
+            expire_cleanup_previews()
+            preview = store.one("SELECT * FROM workspace_cleanup_previews WHERE id=?", (preview_id,))
+            if not preview:
+                raise HTTPException(404, "工作区预览不存在")
+            result = json.loads(preview["result"]) if preview["result"] != "{}" else None
+            if preview["status"] == "complete":
+                next_step = (
+                    "如需删除，请在对应执行电脑由用户明确运行 pal-arena workspaces "
+                    "--config <执行端配置文件> --token-file <电脑凭据文件> --apply；"
+                    "执行时会再次检查任务、文件和远端提交。"
+                    if result and result.get("candidates")
+                    else "预览已完成，没有符合安全条件的工作区可回收。"
+                )
+            else:
+                next_step = None
+            return {
+                "id": preview["id"],
+                "machine_id": preview["machine_id"],
+                "status": preview["status"],
+                "created": preview["created"],
+                "updated": preview["updated"],
+                "result": result,
+                "next_step": next_step,
+            }
+
+    @app.post("/api/machines/workspaces/cleanup-previews/poll")
+    def workspace_cleanup_preview_poll(request: Request):
+        with store.tx():
+            actor = identity(request, "machine")
+            worker_protocol(request)
+            expire_cleanup_previews()
+            preview = store.one(
+                "SELECT id,keep FROM workspace_cleanup_previews "
+                "WHERE machine_id=? AND status='pending' ORDER BY created LIMIT 1",
+                (actor["id"],),
+            )
+            if not preview:
+                return None
+            now = time.time()
+            store.db.execute(
+                "UPDATE workspace_cleanup_previews SET status='running',updated=? WHERE id=? AND status='pending'",
+                (now, preview["id"]),
+            )
+            return {"id": preview["id"], "keep": preview["keep"]}
+
+    @app.post("/api/machines/workspaces/cleanup-previews/{preview_id}/result")
+    def workspace_cleanup_preview_complete(preview_id: str, data: CleanupPreviewCompletion, request: Request):
+        with store.tx():
+            actor = identity(request, "machine")
+            worker_protocol(request)
+            preview = store.one(
+                "SELECT status FROM workspace_cleanup_previews WHERE id=? AND machine_id=?",
+                (preview_id, actor["id"]),
+            )
+            if not preview:
+                raise HTTPException(404, "工作区预览请求不存在")
+            if preview["status"] != "running":
+                raise Conflict("工作区预览已结束或过期；请创建新的预览请求")
+            if data.status == "complete" and data.error:
+                raise HTTPException(422, "成功预览不能包含失败说明")
+            store.db.execute(
+                "UPDATE workspace_cleanup_previews SET status=?,updated=?,result=? WHERE id=?",
+                (data.status, time.time(), encoded(data.model_dump()), preview_id),
+            )
+            return {"status": data.status}
 
     @app.post("/api/runs/heartbeat")
     def run_heartbeat(request: Request):

@@ -445,6 +445,17 @@ def directory_size(root: Path) -> int:
     return total
 
 
+def storage_metrics(root: Path, limit: int) -> dict:
+    """Return the local workspace budget and filesystem capacity for authenticated heartbeats."""
+    usage = shutil.disk_usage(root)
+    return {
+        "storage_bytes": directory_size(root),
+        "storage_limit_bytes": limit,
+        "disk_total_bytes": usage.total,
+        "disk_free_bytes": usage.free,
+    }
+
+
 def safe_component(value: str) -> str:
     if not isinstance(value, str) or not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", value):
         raise WorkerError("Invalid task identifier")
@@ -1537,6 +1548,7 @@ class Worker:
         self.stop = threading.Event()
         self.active = {}
         self.active_lock = threading.Lock()
+        self.cleanup_preview_lock = threading.Lock()
         self.desktop_locks = {}
         self.desktop_bridge = desktop_bridge
         self.last_registration = 0
@@ -1593,13 +1605,75 @@ class Worker:
                 "os": platform.system(),
                 "slots": self.config["slots"],
                 "agents": rows,
-                "storage_bytes": directory_size(self.root),
+                **storage_metrics(self.root, self.config["storage_limit_bytes"]),
                 "github_members": self.github_members(),
             },
         )
         self.machine_id = response["machine_id"]
         self.agent_map = {response["agents"][a["name"]]: a for a in self.config["agents"]}
         self.last_registration = time.monotonic()
+
+    @staticmethod
+    def _cleanup_preview_item(item):
+        return {
+            "project_id": str(item.get("project_id", ""))[:80],
+            "task_id": str(item.get("task_id", ""))[:80],
+            "attempt": max(1, int(item.get("attempt", 1))),
+            "bytes": max(0, int(item.get("bytes", 0))),
+            "updated": float(item.get("updated", 0)),
+            "reason": str(item.get("reason", "工作区检查未完成，已保留"))[:300],
+        }
+
+    def _run_cleanup_preview(self, preview):
+        from .workspaces import inventory, plan
+
+        try:
+            items = inventory(self.root)
+            tasks = []
+            for start in range(0, len(items), 100):
+                batch = [{"id": item["task_id"], "attempt": item["attempt"]} for item in items[start : start + 100]]
+                response = self.machine.request("POST", "/api/machines/workspaces/status", {"tasks": batch})
+                if not isinstance(response, dict) or not isinstance(response.get("tasks"), list):
+                    raise WorkerError("中心未返回有效的任务状态；所有工作区均保留")
+                tasks.extend(response["tasks"])
+            report = plan(self.root, {"tasks": tasks}, keep=preview["keep"])
+            result = {
+                "status": "complete",
+                "candidates": [self._cleanup_preview_item(item) for item in report["candidates"][:2000]],
+                "preserved": [self._cleanup_preview_item(item) for item in report["preserved"][:2000]],
+                "reclaimable_bytes": report["reclaimable_bytes"],
+                "candidate_count": len(report["candidates"]),
+                "preserved_count": len(report["preserved"]),
+            }
+        except Exception:
+            result = {
+                "status": "failed",
+                "candidates": [],
+                "preserved": [],
+                "reclaimable_bytes": 0,
+                "error": "执行端未能完成本地检查或 GitHub 同步核验；没有删除任何文件，请检查网络与工作区后重试。",
+            }
+        try:
+            self.machine.request(
+                "POST",
+                f"/api/machines/workspaces/cleanup-previews/{safe_component(preview['id'])}/result",
+                result,
+            )
+        finally:
+            self.cleanup_preview_lock.release()
+
+    def poll_cleanup_preview(self):
+        if not self.cleanup_preview_lock.acquire(blocking=False):
+            return
+        try:
+            preview = self.machine.request("POST", "/api/machines/workspaces/cleanup-previews/poll", {})
+        except Exception:
+            self.cleanup_preview_lock.release()
+            raise
+        if not preview:
+            self.cleanup_preview_lock.release()
+            return
+        threading.Thread(target=self._run_cleanup_preview, args=(preview,), daemon=True).start()
 
     def run_one(self, job):
         api = API(self.config["server"], job["run_token"], self.config.get("allow_http", False))
@@ -1622,9 +1696,10 @@ class Worker:
                 try:
                     api.request("POST", "/api/runs/heartbeat", {})
                     last_ack = time.monotonic()
+                    metrics = storage_metrics(self.root, self.config["storage_limit_bytes"])
                     if (
-                        directory_size(self.root) > self.config["storage_limit_bytes"]
-                        or shutil.disk_usage(self.root).free < MIN_FREE_DISK_BYTES
+                        metrics["storage_bytes"] > metrics["storage_limit_bytes"]
+                        or metrics["disk_free_bytes"] < MIN_FREE_DISK_BYTES
                     ):
                         cancelled.set()
                 except (RunCancelled, AuthenticationError):
@@ -1939,8 +2014,11 @@ class Worker:
                             if time.monotonic() - self.last_registration >= 30:
                                 self.register()
                             self.machine.request(
-                                "POST", "/api/machines/heartbeat", {"storage_bytes": directory_size(self.root)}
+                                "POST",
+                                "/api/machines/heartbeat",
+                                storage_metrics(self.root, self.config["storage_limit_bytes"]),
                             )
+                            self.poll_cleanup_preview()
                             futures = {f for f in futures if not f.done()}
                             while len(futures) < self.config["slots"]:
                                 job = self.machine.request("POST", "/api/machines/claim", {})

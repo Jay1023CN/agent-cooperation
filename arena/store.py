@@ -70,7 +70,13 @@ class Store:
           policy TEXT NOT NULL DEFAULT '{}', status TEXT NOT NULL DEFAULT 'active', created REAL NOT NULL);
         CREATE TABLE IF NOT EXISTS machines (
           id TEXT PRIMARY KEY, name TEXT NOT NULL, os TEXT NOT NULL, seen REAL NOT NULL,
-          slots INTEGER NOT NULL, storage_bytes INTEGER NOT NULL DEFAULT 0);
+          slots INTEGER NOT NULL, storage_bytes INTEGER NOT NULL DEFAULT 0,
+          storage_limit_bytes INTEGER, disk_total_bytes INTEGER, disk_free_bytes INTEGER, storage_measured REAL);
+        CREATE TABLE IF NOT EXISTS workspace_cleanup_previews (
+          id TEXT PRIMARY KEY, machine_id TEXT NOT NULL, requested_by TEXT NOT NULL,
+          keep INTEGER NOT NULL, status TEXT NOT NULL, created REAL NOT NULL, updated REAL NOT NULL,
+          result TEXT NOT NULL DEFAULT '{}');
+        CREATE INDEX IF NOT EXISTS workspace_cleanup_pending ON workspace_cleanup_previews(status, created);
         CREATE TABLE IF NOT EXISTS agents (
           id TEXT PRIMARY KEY, machine_id TEXT NOT NULL, name TEXT NOT NULL, provider TEXT NOT NULL,
           roles TEXT NOT NULL, capabilities TEXT NOT NULL, model TEXT, preference INTEGER NOT NULL,
@@ -116,9 +122,15 @@ class Store:
         if "channel" not in {row[1] for row in self.db.execute("PRAGMA table_info(tasks)")}:
             self.db.execute("ALTER TABLE tasks ADD COLUMN channel TEXT NOT NULL DEFAULT 'shared'")
         for table, additions in {
+            "machines": {
+                # Members whose GitHub login this machine verified at registration (no credentials).
+                "github_members": "TEXT NOT NULL DEFAULT '[]'",
+                "storage_limit_bytes": "INTEGER",
+                "disk_total_bytes": "INTEGER",
+                "disk_free_bytes": "INTEGER",
+                "storage_measured": "REAL",
+            },
             "agents": {"readiness": "TEXT NOT NULL DEFAULT '{}'", "routing_profile": "TEXT NOT NULL DEFAULT '{}'"},
-            # Members whose GitHub login this machine verified at registration (no credentials).
-            "machines": {"github_members": "TEXT NOT NULL DEFAULT '[]'"},
             "tasks": {
                 "difficulty": "TEXT NOT NULL DEFAULT 'standard'",
                 "context_tokens": "INTEGER NOT NULL DEFAULT 0",
@@ -181,6 +193,23 @@ class Store:
                 with contextlib.suppress(FileNotFoundError):
                     total += path.stat().st_size
         return total
+
+    def storage_report(self):
+        used = self.storage_used()
+        quota_free = max(0, self.quota - used)
+        reserve = self.storage_headroom()
+        disk = shutil.disk_usage(self.root)
+        blocked = used + reserve >= self.quota or disk.free < MIN_FREE_DISK_BYTES
+        near_limit = used + reserve >= self.quota * 0.9 or disk.free < MIN_FREE_DISK_BYTES * 2
+        return {
+            "used_bytes": used,
+            "quota_bytes": self.quota,
+            "free_bytes": quota_free,
+            "reserve_bytes": reserve,
+            "disk_total_bytes": disk.total,
+            "disk_free_bytes": disk.free,
+            "state": "blocked" if blocked else "near_limit" if near_limit else "ok",
+        }
 
     def limit_database(self):
         """Keep SQLite growth within the configured center budget, with WAL headroom."""
@@ -551,6 +580,7 @@ class Store:
             machines = self.all("SELECT * FROM machines ORDER BY name")
             for m in machines:
                 m["online"] = m["seen"] > time.time() - 45
+                m["storage_state"] = self.machine_storage_state(m)
                 m["github_members"] = [
                     {"member_id": item["member_id"], "github_login": item["github_login"]}
                     for item in json.loads(m["github_members"])
@@ -601,7 +631,7 @@ class Store:
                     "AND (a.task_id IS NULL OR t.channel IN (?,?)) ORDER BY a.created DESC",
                     (project_id, "shared", visible_channel),
                 )
-            used = sum(p.stat().st_size for p in self.root.rglob("*") if p.is_file() and not p.is_symlink())
+            storage = self.storage_report()
             return {
                 "projects": projects,
                 "machines": machines,
@@ -610,7 +640,16 @@ class Store:
                 "messages": messages,
                 "events": events,
                 "artifacts": artifacts,
-                "storage": {"used": used, "quota": self.quota},
+                "storage": {
+                    "used": storage["used_bytes"],
+                    "quota": storage["quota_bytes"],
+                    "free": storage["free_bytes"],
+                    **{
+                        key: value
+                        for key, value in storage.items()
+                        if key not in ("used_bytes", "quota_bytes", "free_bytes")
+                    },
+                },
                 "server_time": time.time(),
             }
 
@@ -628,12 +667,57 @@ class Store:
         for project_id, channel in affected:
             self.reconcile(project_id, channel)
 
-    def register(self, machine_id, name, os_name, slots, agents, storage_bytes=0, github_members=()):
+    @staticmethod
+    def machine_storage_state(machine):
+        if (
+            not machine.get("online")
+            or not machine.get("storage_measured")
+            or machine.get("storage_limit_bytes") is None
+            or machine.get("disk_free_bytes") is None
+        ):
+            return "unknown"
+        used = machine.get("storage_bytes", 0)
+        limit = machine.get("storage_limit_bytes")
+        free = machine.get("disk_free_bytes")
+        if (limit is not None and used >= limit) or (free is not None and free < MIN_FREE_DISK_BYTES):
+            return "blocked"
+        if (limit is not None and used >= limit * 0.9) or (free is not None and free < MIN_FREE_DISK_BYTES * 2):
+            return "near_limit"
+        return "ok"
+
+    def register(
+        self,
+        machine_id,
+        name,
+        os_name,
+        slots,
+        agents,
+        storage_bytes=0,
+        github_members=(),
+        storage_limit_bytes=None,
+        disk_total_bytes=None,
+        disk_free_bytes=None,
+    ):
         self.db.execute(
-            "INSERT INTO machines(id,name,os,seen,slots,storage_bytes,github_members) VALUES(?,?,?,?,?,?,?) "
+            "INSERT INTO machines(id,name,os,seen,slots,storage_bytes,github_members,storage_limit_bytes,"
+            "disk_total_bytes,disk_free_bytes,storage_measured) VALUES(?,?,?,?,?,?,?,?,?,?,?) "
             "ON CONFLICT(id) DO UPDATE SET name=excluded.name,os=excluded.os,seen=excluded.seen,"
-            "slots=excluded.slots,storage_bytes=excluded.storage_bytes,github_members=excluded.github_members",
-            (machine_id, name, os_name, time.time(), slots, storage_bytes, encoded(list(github_members))),
+            "slots=excluded.slots,storage_bytes=excluded.storage_bytes,github_members=excluded.github_members,"
+            "storage_limit_bytes=excluded.storage_limit_bytes,disk_total_bytes=excluded.disk_total_bytes,"
+            "disk_free_bytes=excluded.disk_free_bytes,storage_measured=excluded.storage_measured",
+            (
+                machine_id,
+                name,
+                os_name,
+                time.time(),
+                slots,
+                storage_bytes,
+                encoded(list(github_members)),
+                storage_limit_bytes,
+                disk_total_bytes,
+                disk_free_bytes,
+                time.time(),
+            ),
         )
         self.db.execute("UPDATE agents SET enabled=0 WHERE machine_id=?", (machine_id,))
         for a in agents:

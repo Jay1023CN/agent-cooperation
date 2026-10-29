@@ -119,6 +119,13 @@ def test_nonaccepted_server_state_preserves_workspace(completed_workspaces, stat
     assert preview(completed_workspaces)["candidates"] == []
 
 
+def test_preview_explains_that_active_tasks_are_preserved(completed_workspaces):
+    completed_workspaces[1]["tasks"][0]["status"] = "running"
+    result = preview(completed_workspaces)
+    preserved = next(item for item in result["preserved"] if item["task_id"] == "task-0")
+    assert "仍在排队、执行或验收中" in preserved["reason"]
+
+
 @pytest.mark.parametrize(
     "field,value",
     [

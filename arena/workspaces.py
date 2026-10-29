@@ -308,6 +308,8 @@ def _eligible(root, item, status, remote_verifier):
     _, receipt = _receipt(root, item)
     if receipt.get("status") != "complete_acknowledged":
         raise CleanupError("执行结果未确认，已保留")
+    if status and status.get("status") in ("queued", "running", "in_review", "coordinating"):
+        raise CleanupError("任务仍在排队、执行或验收中，已保留")
     if not status or status.get("status") != "done":
         raise CleanupError("服务器未确认此任务已经完成验收，已保留")
     if any(status.get(key) != item[key] for key in ("project_id", "attempt")):

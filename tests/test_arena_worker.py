@@ -1251,6 +1251,46 @@ def test_worker_does_not_start_agent_when_disk_space_is_low(tmp_path):
     assert completion["failed"] and "剩余空间不足" in completion["result"]
 
 
+def test_worker_cleanup_preview_runs_local_plan_and_strips_absolute_paths(tmp_path):
+    from unittest.mock import MagicMock
+
+    config = {"server": "http://localhost:8765", "workspace_root": str(tmp_path), "storage_limit_bytes": 5000}
+    worker = Worker(config, token="machine-secret")
+    worker.machine = MagicMock()
+    worker.machine.request.return_value = {"tasks": []}
+    worker.cleanup_preview_lock.acquire()
+    workspace = tmp_path / "project" / "task" / "1"
+    with (
+        patch("arena.workspaces.inventory", return_value=[{"project_id": "project", "task_id": "task", "attempt": 1}]),
+        patch(
+            "arena.workspaces.plan",
+            return_value={
+                "candidates": [
+                    {
+                        "project_id": "project",
+                        "task_id": "task",
+                        "attempt": 1,
+                        "workspace": str(workspace),
+                        "bytes": 4096,
+                        "updated": 1,
+                        "reason": "已验收并确认 GitHub 同步",
+                    }
+                ],
+                "preserved": [],
+                "reclaimable_bytes": 4096,
+            },
+        ),
+    ):
+        worker._run_cleanup_preview({"id": "preview123", "keep": 3})
+    result_call = worker.machine.request.call_args
+    assert result_call.args[:2] == (
+        "POST",
+        "/api/machines/workspaces/cleanup-previews/preview123/result",
+    )
+    assert result_call.args[2]["candidates"][0]["bytes"] == 4096
+    assert "workspace" not in result_call.args[2]["candidates"][0]
+
+
 def test_worker_refuses_start_when_workspace_is_owned_by_another_process(tmp_path):
     from unittest.mock import MagicMock
 

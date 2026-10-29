@@ -894,6 +894,90 @@ def test_center_reserves_space_on_host_disk(arena, monkeypatch):
     assert response.status_code == 507 and "剩余空间不足" in response.json()["detail"]
 
 
+def test_storage_api_reports_center_and_authenticated_machine_capacity(arena):
+    client, _ = arena
+    auth, registered = machine(client)
+    response = client.post(
+        "/api/machines/heartbeat",
+        headers=auth,
+        json={
+            "storage_bytes": 900,
+            "storage_limit_bytes": 1000,
+            "disk_total_bytes": 10000,
+            "disk_free_bytes": 3_000_000_000,
+        },
+    )
+    assert response.status_code == 200
+    report = client.get("/api/storage").json()
+    assert report["center"]["used_bytes"] >= 0
+    assert report["center"]["quota_bytes"] == 5_000_000_000
+    assert report["center"]["disk_total_bytes"] >= report["center"]["disk_free_bytes"] >= 0
+    worker = next(item for item in report["machines"] if item["id"] == registered["machine_id"])
+    assert worker["storage_bytes"] == 900
+    assert worker["storage_limit_bytes"] == 1000
+    assert worker["disk_free_bytes"] == 3_000_000_000
+    assert worker["storage_state"] == "near_limit"
+
+
+def test_legacy_machine_heartbeat_keeps_capacity_unknown(arena):
+    client, _ = arena
+    auth, registered = machine(client)
+    assert client.post("/api/machines/heartbeat", headers=auth, json={}).status_code == 200
+    report = client.get("/api/storage").json()
+    worker = next(item for item in report["machines"] if item["id"] == registered["machine_id"])
+    assert worker["storage_state"] == "unknown"
+
+
+def test_workspace_cleanup_preview_requires_online_machine_and_returns_only_verified_report(arena):
+    client, _ = arena
+    auth, registered = machine(client)
+    queued = client.post("/api/workspaces/cleanup-previews", json={"machine_id": registered["machine_id"], "keep": 2})
+    assert queued.status_code == 202
+    preview_id = queued.json()["id"]
+    claimed = client.post("/api/machines/workspaces/cleanup-previews/poll", headers=auth, json={})
+    assert claimed.json() == {"id": preview_id, "keep": 2}
+    assert client.get(f"/api/workspaces/cleanup-previews/{preview_id}").json()["status"] == "running"
+    completed = client.post(
+        f"/api/machines/workspaces/cleanup-previews/{preview_id}/result",
+        headers=auth,
+        json={
+            "status": "complete",
+            "candidates": [
+                {
+                    "project_id": "project",
+                    "task_id": "task",
+                    "attempt": 1,
+                    "bytes": 4096,
+                    "reason": "已验收并确认 GitHub 同步",
+                }
+            ],
+            "preserved": [],
+            "reclaimable_bytes": 4096,
+            "candidate_count": 1,
+            "preserved_count": 0,
+        },
+    )
+    assert completed.status_code == 200
+    report = client.get(f"/api/workspaces/cleanup-previews/{preview_id}").json()
+    assert report["status"] == "complete"
+    assert report["result"]["reclaimable_bytes"] == 4096
+    assert "workspace" not in report["result"]["candidates"][0]
+    assert "--apply" in report["next_step"]
+
+
+def test_workspace_cleanup_preview_expires_without_claiming(arena):
+    client, store = arena
+    _, registered = machine(client)
+    queued = client.post("/api/workspaces/cleanup-previews", json={"machine_id": registered["machine_id"]})
+    assert queued.status_code == 202
+    with store.tx():
+        store.db.execute(
+            "UPDATE workspace_cleanup_previews SET created=? WHERE id=?", (time.time() - 901, queued.json()["id"])
+        )
+    report = client.get(f"/api/workspaces/cleanup-previews/{queued.json()['id']}").json()
+    assert report["status"] == "expired"
+
+
 def test_database_page_limit_prevents_unbounded_growth(arena):
     from arena.store import StorageFull
 
