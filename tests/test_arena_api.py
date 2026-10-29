@@ -622,6 +622,130 @@ def test_memory_approval_snapshot_refresh_and_personal_isolation(arena):
     assert {memory["id"] for memory in private_snapshot} == {public["id"], personal["id"]}
 
 
+def test_leader_automatically_remembers_and_updates_from_member_conversation(arena):
+    client, _ = arena
+    p = project(client)
+    member_id = client.get("/api/me").json()["id"]
+    client.post(f'/api/projects/{p["id"]}/messages', json={"content": "这个项目我喜欢大胆的界面"})
+    machine_auth, _ = machine(client, roles=["leader"])
+    job, auth = claim(client, machine_auth)
+    body = {
+        "scope": "project",
+        "category": "preference",
+        "content": "界面风格大胆",
+        "client_request_id": "memory-request-1",
+    }
+    saved = client.post("/api/runs/automatic-memory", headers=auth, json=body)
+    assert saved.status_code == 201, saved.text
+    memory = saved.json()
+    assert memory["status"] == "active" and memory["source_task"] == job["task"]["id"]
+    assert client.post("/api/runs/automatic-memory", headers=auth, json=body).json()["id"] == memory["id"]
+    personal = client.post(
+        "/api/runs/automatic-memory",
+        headers=auth,
+        json={"scope": "member", "category": "preference", "content": "喜欢简洁的回复"},
+    ).json()
+    assert personal["scope_id"] == member_id and personal["status"] == "active"
+    partner = client.post("/api/invites", json={"name": "Partner", "kind": "member"}).json()
+    partner_auth = {"Authorization": "Bearer " + partner["token"]}
+    assert (
+        client.get(f'/api/projects/{p["id"]}/memories', headers=partner_auth, params={"scope": "member"}).json()[
+            "memories"
+        ]
+        == []
+    )
+    assert client.delete("/api/memories/" + personal["id"], headers=partner_auth).status_code == 404
+    assert client.post("/api/runs/complete", headers=auth, json={"result": "收到"}).status_code == 200
+
+    client.post(f'/api/projects/{p["id"]}/messages', json={"content": "颜色再克制一些"})
+    _, next_auth = claim(client, machine_auth)
+    memories = client.get("/api/runs/context", headers=next_auth).json()["memories"]
+    assert memory["id"] in {entry["id"] for entry in memories}
+    assert personal["id"] not in {entry["id"] for entry in memories}
+    changed = client.post(
+        "/api/runs/automatic-memory",
+        headers=next_auth,
+        json={
+            "scope": "project",
+            "category": "preference",
+            "content": "界面大胆，颜色克制",
+            "memory_id": memory["id"],
+            "expected_revision": 1,
+        },
+    )
+    assert changed.status_code == 201 and changed.json()["revision"] == 2
+    assert client.post("/api/runs/complete", headers=next_auth, json={"result": "收到"}).status_code == 200
+    client.post(f'/api/projects/{p["id"]}/messages', json={"content": "继续聊", "channel": "personal"})
+    _, private_auth = claim(client, machine_auth)
+    private_memories = client.get("/api/runs/context", headers=private_auth).json()["memories"]
+    assert personal["id"] in {entry["id"] for entry in private_memories}
+    assert client.delete("/api/memories/" + personal["id"]).status_code == 200
+    assert client.get(f'/api/projects/{p["id"]}/memories', params={"scope": "member"}).json()["memories"] == []
+
+
+def test_automatic_memory_is_limited_to_conversation_leader_and_scope(arena):
+    client, _ = arena
+    p = project(client)
+    client.post(f'/api/projects/{p["id"]}/tasks', json={"title": "工作", "prompt": "实施"})
+    machine_auth, _ = machine(client, roles=["worker"])
+    _, auth = claim(client, machine_auth)
+    assert client.post("/api/runs/automatic-memory", headers=auth, json={"content": "不应记住"}).status_code == 409
+
+
+def test_memory_search_and_consolidation_keep_old_entries_and_scope(arena):
+    client, _ = arena
+    p = project(client)
+    url = f'/api/projects/{p["id"]}/memories'
+    old = client.post(url, json={"scope": "project", "category": "preference", "content": "界面排版偏向大胆"}).json()
+    related = client.post(url, json={"scope": "project", "category": "preference", "content": "界面配色克制"}).json()
+    for i in range(26):
+        client.post(url, json={"scope": "project", "category": "preference", "content": f"其他偏好 {i}"})
+    secret = client.post(url, json={"scope": "member", "category": "context", "content": "界面私密背景"}).json()
+    client.post(f'/api/projects/{p["id"]}/messages', json={"content": "看看界面"})
+    machine_auth, _ = machine(client, roles=["leader"])
+    _, auth = claim(client, machine_auth)
+    snapshot = client.get("/api/runs/context", headers=auth).json()["memories"]
+    assert old["id"] not in {m["id"] for m in snapshot}
+    found = client.get("/api/runs/memories/search", headers=auth, params={"q": "界面排版"}).json()["memories"]
+    assert found[0]["id"] == old["id"]
+    assert secret["id"] not in {m["id"] for m in found}
+    body = {
+        "memories": [{"id": old["id"], "revision": 1}, {"id": related["id"], "revision": 1}],
+        "category": "preference",
+        "content": "界面排版大胆，配色克制",
+    }
+    wrong = {**body, "memories": [body["memories"][0], {"id": related["id"], "revision": 2}]}
+    assert client.post("/api/runs/memories/consolidate", headers=auth, json=wrong).status_code == 409
+    merged = client.post("/api/runs/memories/consolidate", headers=auth, json=body)
+    assert merged.status_code == 200 and merged.json()["revision"] == 2
+    listed = client.get(url).json()["memories"]
+    assert next(m for m in listed if m["id"] == related["id"])["status"] == "merged"
+    found = client.get("/api/runs/memories/search", headers=auth, params={"q": "界面排版"}).json()["memories"]
+    assert found[0]["content"] == "界面排版大胆，配色克制"
+    assert related["id"] not in {m["id"] for m in found}
+
+
+def test_personal_conversation_automatically_saves_only_personal_memory(arena):
+    client, _ = arena
+    p = project(client)
+    client.post(f'/api/projects/{p["id"]}/messages', json={"content": "我喜欢短一点的回复", "channel": "personal"})
+    machine_auth, _ = machine(client, roles=["leader"])
+    _, auth = claim(client, machine_auth)
+    assert (
+        client.post(
+            "/api/runs/automatic-memory", headers=auth, json={"scope": "project", "content": "私人偏好"}
+        ).status_code
+        == 409
+    )
+    saved = client.post(
+        "/api/runs/automatic-memory",
+        headers=auth,
+        json={"scope": "member", "category": "preference", "content": "喜欢简洁的回复"},
+    )
+    assert saved.status_code == 201 and saved.json()["status"] == "active"
+    assert client.get(f'/api/projects/{p["id"]}/memories', params={"scope": "project"}).json()["memories"] == []
+
+
 def test_cancelling_parent_revokes_running_descendant_leases(arena):
     client, store = arena
     p = project(client)

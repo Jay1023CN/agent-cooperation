@@ -1148,21 +1148,38 @@ def task_prompt(job, *, desktop=False):
         "用户已经明确要求开始、继续或按方案执行时，结合已有讨论整理目标、执行计划、依赖和验收方式，"
         "再按需要分派；简单工作不必为了分工启动多个代理。不用重复确认已经明确授权的工作。\n"
         "执行任务完成时提供实际文件、测试和产物证据，不要把计划当作已完成的结果。\n"
-        "处理约束的顺序：当前项目验收需求 > 当前任务明确要求 > 已确认的项目记忆 > 个人偏好。冲突要指出，不能让记忆覆盖新需求。\n"
+        "处理约束的顺序：当前项目验收需求 > 当前任务明确要求 > 项目记忆 > 个人偏好。冲突要指出，不能让记忆覆盖新需求。\n"
         "recent_messages 可能为控制上下文长度而省略较早对话；conversation_truncated 为 true 时，"
         "需要较早内容再按需读取 context，不要猜测缺失的约定。\n"
-        "memory_snapshot 是领取任务时选出的有限、带版本且已确认的记忆，不代表全部历史。默认保持快照；只有明确需要时才调用 memories(refresh=true)。\n"
-        "新得到的长期结论用 propose_memory 提议，等待用户确认；临时日志、猜测和凭据不要写入记忆。\n"
+        "memory_snapshot 是领取任务时选出的有限、带版本的记忆，不代表全部历史。默认保持快照；需要更新时可调用 memories(refresh=true)。\n"
+        "负责人在日常对话中自动识别值得以后沿用的偏好、背景、项目决定和约束，直接调用 remember 保存，无需用户手动填写。"
+        "判断标准是以后遇到类似任务时这条信息是否会改变做法。主动从用户的选择、表扬、反感和纠正中识别偏好，"
+        "即使用户没有要求记住或说明长期适用，也要根据上下文整理；反复出现的反馈可增强判断，但不是保存的前提。"
+        "区分对当前任务的临时要求和可能适用于类似任务的喜好，记下适用范围，不要把单次选择扩大成所有情境的习惯。"
+        "只保存有上下文支撑的简短结论，依据新的选择和反馈修正旧记忆；没有足够依据的猜测不记录。"
+        "需要回忆相关旧偏好时使用 search_memories 按主题检索，不要只依赖启动时的记忆快照。"
+        "发现同一范围内有多条实质重复或可合并的记忆时，调用 consolidate_memories 整理为精炼的一条，"
+        "保留适用场景和重要差异；不同主题或相互矛盾的信息不要强行合并。原条目仍可查看。"
+        "共享频道中会影响项目工作的偏好和约定使用 project 范围，让团队后续任务沿用；个人资料使用 member，个人会话只能保存 member。"
+        "先查已有记忆，内容变化时用 memory_id 和 expected_revision 更新，避免重复；临时任务、猜测和凭据不记录。"
+        "其他执行成员仍可用 propose_memory 提议项目知识。\n"
         "验收成员必须读取源任务的实际 commit 和文件，运行适当检查，再提交 report_review，不能仅复述作者结论。\n"
         "integration 若包含依赖冲突，请先检查 git status，解决列出的文件并 add/commit，再逐个 merge 尚未包含的 dependency_commits；"
         "最终每个依赖提交必须成为 HEAD 的祖先，不能跳过冲突或仅复制部分文件。\n"
         "确需执行平台操作时可使用 pal_arena MCP 的 context/create_task/update_requirements/report_review/finish_project。\n"
-        "纯讨论直接回答，不使用这些写操作；只有确需执行平台操作且当前客户端没有该 MCP 时，才在最终回复中输出 JSON 对象："
+        "纯讨论直接回答，不创建任务或修改项目；其中发现长期有用的信息仍可调用 remember。"
+        "只有确需执行平台操作且当前客户端没有该 MCP 时，才在最终回复中输出 JSON 对象："
         '{"summary":"本次结果", "arena_actions":[{"action":"create_task","title":"...","prompt":"...",'
         '"capability":"code","acceptance":["..."],"dependencies":[]}]}。'
         "允许的 action 还包括 update_requirements(requirements 数组，可带刚通过 context 读取的 expected_revision 防止覆盖伙伴更新)、"
         "report_review(decision 为 accept 或 changes_requested、summary、evidence 字符串数组)、"
-        "finish_project(summary)、propose_memory(category,content)。create_task 可指定 difficulty(routine/standard/deep)、context_tokens 和 requested_agent；"
+        "finish_project(summary)、propose_memory(category,content)、remember(scope,category,content,memory_id,expected_revision)、"
+        "consolidate_memories(memories 为 id 和 revision 的数组,content,category)。"
+        "当对话中识别出值得保存的偏好且无法调用 MCP 时，必须用 JSON 回退提交 remember，例如："
+        '{"summary":"正常回复用户的话", "arena_actions":[{"action":"remember","scope":"project",'
+        '"category":"preference","content":"界面偏好大胆"}]}。'
+        "不要只在回复里说记住了而不提交保存动作；没有值得保存的内容时可以直接回复。"
+        "create_task 可指定 difficulty(routine/standard/deep)、context_tokens 和 requested_agent；"
         "负责人可用 recover_task(task_id,action=retry/cancel,requested_agent) 处理明确失败且可安全恢复的任务；"
         "结果不明、已中断或发布任务必须先由用户核对，不能自动重试。"
         "依赖可用 $0 引用本次动作数组中第 0 个 create_task 的结果。\n"
@@ -1191,6 +1208,8 @@ def relay_actions(result, api):
         "report_review": "review",
         "finish_project": "finish",
         "propose_memory": "memories",
+        "remember": "automatic-memory",
+        "consolidate_memories": "memories/consolidate",
         "recover_task": "recover",
     }
     for index, action in enumerate(actions):

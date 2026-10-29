@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from urllib.parse import urlencode
 
 from mcp.server.fastmcp import FastMCP
 
@@ -61,6 +62,21 @@ def build_server(api: API):
         return api.request("GET", "/api/runs/memories" + suffix)
 
     @mcp.tool()
+    def search_memories(query: str) -> dict:
+        """Find relevant older memories beyond the initial snapshot; search within the current discussion's scope."""
+        return api.request("GET", "/api/runs/memories/search?" + urlencode({"q": query}))
+
+    @mcp.tool()
+    def consolidate_memories(memories: list[dict], content: str, category: str = "context") -> dict:
+        """Merge related memories in the same scope, retaining the original entries for inspection.
+
+        Each item supplies id and revision. Preserve context and distinct details in the concise merged content.
+        """
+        return api.request(
+            "POST", "/api/runs/memories/consolidate", {"memories": memories, "content": content, "category": category}
+        )
+
+    @mcp.tool()
     def propose_memory(content: str, category: str = "context") -> dict:
         """Propose durable context for human confirmation; never store credentials or unverified guesses.
 
@@ -68,6 +84,33 @@ def build_server(api: API):
         A proposal does not become active until a member confirms it.
         """
         return api.request("POST", "/api/runs/memories", {"content": content, "category": category})
+
+    @mcp.tool()
+    def remember(
+        content: str,
+        category: str = "context",
+        scope: str = "project",
+        memory_id: str | None = None,
+        expected_revision: int | None = None,
+        request_key: str | None = None,
+    ) -> dict:
+        """Remember a durable preference, background, decision or constraint from this member conversation.
+
+        Use member scope for personal details and project scope for shared project context. Update an existing
+        matching memory by providing its id and revision; avoid duplicates and do not store credentials.
+        """
+        return api.request(
+            "POST",
+            "/api/runs/automatic-memory",
+            {
+                "content": content,
+                "category": category,
+                "scope": scope,
+                "memory_id": memory_id,
+                "expected_revision": expected_revision,
+                "client_request_id": request_key,
+            },
+        )
 
     @mcp.tool()
     def recover_task(task_id: str, action: str, requested_agent: str | None = None) -> dict:

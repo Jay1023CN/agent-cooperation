@@ -518,7 +518,7 @@ function openMemoryEditor(id) {
       )
       .join(
         '',
-      )}</select></div><div class="field"><label for="f-memory-content">要记住什么</label><textarea name="content" id="f-memory-content" rows="6" required maxlength="8000" placeholder="写清楚适用范围，例如这个项目的前端采用哪种技术。">${e(existing?.content || '')}</textarea></div><div class="field"><label for="f-memory-status">状态</label><select name="status" id="f-memory-status"><option value="active" ${existing?.status === 'active' ? 'selected' : ''}>已确认，启用</option><option value="proposed" ${existing?.status === 'proposed' ? 'selected' : ''}>待确认</option>${existing ? `<option value="disabled" ${existing.status === 'disabled' ? 'selected' : ''}>停用</option>` : ''}</select></div>${modalActions('保存记忆')}`,
+      )}</select></div><div class="field"><label for="f-memory-content">要记住什么</label><textarea name="content" id="f-memory-content" rows="6" required maxlength="8000" placeholder="写清楚适用范围，例如这个项目的前端采用哪种技术。">${e(existing?.content || '')}</textarea></div><div class="field"><label for="f-memory-status">状态</label><select name="status" id="f-memory-status"><option value="active" ${existing?.status === 'active' ? 'selected' : ''}>已启用</option><option value="proposed" ${existing?.status === 'proposed' ? 'selected' : ''}>待确认</option>${existing ? `<option value="disabled" ${existing.status === 'disabled' ? 'selected' : ''}>停用</option>` : ''}</select></div>${modalActions('保存记忆')}`,
     async (form) => {
       const body = {
         category: form.get('category'),
@@ -1075,6 +1075,13 @@ document.addEventListener('click', async (event) => {
         });
         await loadMemories(true);
         toast('记忆状态已更新。');
+      }
+    } else if (action === 'delete-memory' && editable()) {
+      const item = memories.find((value) => value.id === button.dataset.id);
+      if (item) {
+        await api(`/api/memories/${encodeURIComponent(item.id)}`, { method: 'DELETE' });
+        await loadMemories(true);
+        toast('记忆已删除。');
       }
     } else if (action === 'task') openTask(button.dataset.id);
     else if (action === 'close-modal') closeModal();

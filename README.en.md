@@ -162,7 +162,7 @@ To look around first, choose the demo on the sign-in page or open `/?demo=1`.
 
 - **No pretending to be online.** A computer being online, a client being installed and a subscription being usable are three different states, shown separately. Machines that are not connected show an empty state, not demo data.
 - **Unknown outcomes stop writes.** A write with an uncertain result is not automatically resent after a timeout or disconnect. Unknown quota remains unknown.
-- **Memory needs a human.** "Remember this" proposals from the AI wait for a member's approval; every run pins the exact memory version it used.
+- **Memory grows from conversation.** The lead records durable preferences, background and project decisions; you can inspect, edit, disable or delete them. Each run pins the memory version it used.
 - **Private means private.** Personal chats, their tasks, logs and artifacts are visible only to that person and cannot change shared requirements or confirm shared deliveries.
 
 ## Day-to-day

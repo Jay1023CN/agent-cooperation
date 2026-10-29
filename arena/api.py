@@ -294,6 +294,40 @@ class MemoryProposal(Input):
         return value.strip()
 
 
+class AutomaticMemory(Input):
+    scope: Literal["project", "member"] = "project"
+    category: Literal["preference", "decision", "context", "constraint"] = "context"
+    content: str = Field(min_length=1, max_length=8000)
+    memory_id: str | None = Field(default=None, max_length=100)
+    expected_revision: int | None = Field(default=None, ge=1)
+    client_request_id: str | None = Field(default=None, min_length=8, max_length=100)
+
+    @field_validator("content")
+    @classmethod
+    def meaningful_content(cls, value):
+        if not value.strip():
+            raise ValueError("记忆内容不能为空")
+        return value.strip()
+
+
+class MemoryReference(Input):
+    id: Short
+    revision: int = Field(ge=1)
+
+
+class MemoryConsolidation(Input):
+    memories: list[MemoryReference] = Field(min_length=2, max_length=20)
+    category: Literal["preference", "decision", "context", "constraint"] = "context"
+    content: str = Field(min_length=1, max_length=8000)
+
+    @field_validator("content")
+    @classmethod
+    def meaningful_content(cls, value):
+        if not value.strip():
+            raise ValueError("记忆内容不能为空")
+        return value.strip()
+
+
 class Cleanup(Input):
     project_id: Short
     keep: int = Field(default=3, ge=0, le=100)
@@ -953,6 +987,10 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
                 capability="planning",
                 channel=channel,
             )
+            store.db.execute(
+                "INSERT INTO conversation_origins(task_id,message_id,member_id) VALUES(?,?,?)",
+                (task["id"], message_id, actor["id"]),
+            )
             return receipt_write(
                 actor["id"],
                 operation,
@@ -1058,6 +1096,16 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
                     f'更新项目记忆：{updated["category"]}（{updated["status"]}）',
                 )
             return store.one("SELECT * FROM memories WHERE id=?", (memory_id,))
+
+    @app.delete("/api/memories/{memory_id}")
+    def memory_delete(memory_id: str, request: Request):
+        with store.tx():
+            actor = identity(request)
+            memory = memory_for_member(actor, memory_id)
+            store.db.execute("DELETE FROM memories WHERE id=?", (memory_id,))
+            if memory["scope"] == "project":
+                store.event(memory["scope_id"], None, "memory", "已删除一条项目记忆")
+        return {"ok": True}
 
     @app.get("/api/tasks/{task_id}")
     def task_read(task_id: str, request: Request):
@@ -1425,6 +1473,13 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
                 memories = task.get("memory_snapshot", [])
             return {"memories": memories}
 
+    @app.get("/api/runs/memories/search")
+    def run_memory_search(request: Request, q: str = Query(min_length=1, max_length=200)):
+        with store.lock:
+            task, _ = run(request)
+            owner = task["channel"].partition(":")[2] if task["channel"] != "shared" else None
+            return {"memories": store.search_memories(task["project_id"], owner, q)}
+
     @app.post("/api/runs/memories", status_code=201)
     def run_memory_propose(data: MemoryProposal, request: Request):
         with store.tx():
@@ -1438,6 +1493,91 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
             )
             store.event(task["project_id"], task["id"], "memory_proposed", "代理提出记忆建议，等待成员确认")
             return memory
+
+    @app.post("/api/runs/automatic-memory", status_code=201)
+    def run_automatic_memory(data: AutomaticMemory, request: Request):
+        request_id = receipt_key(request, data)
+        body = data.model_dump(exclude={"client_request_id"})
+        with store.tx():
+            task, _ = run(request)
+            if task["kind"] != "leader":
+                raise Conflict("只有处理成员对话的负责人可以整理自动记忆")
+            origin = store.one("SELECT * FROM conversation_origins WHERE task_id=?", (task["id"],))
+            if not origin:
+                raise Conflict("这次运行没有可关联的成员对话")
+            if task["channel"] != "shared" and data.scope == "project":
+                raise Conflict("个人对话不能直接写入团队记忆")
+            scope_id = task["project_id"] if data.scope == "project" else origin["member_id"]
+            receipt_actor = f'run:{task["id"]}:{task["attempt"]}'
+            previous = receipt_read(receipt_actor, "automatic-memory", request_id, body)
+            if previous is not None:
+                return previous
+            if data.memory_id:
+                memory = store.one("SELECT * FROM memories WHERE id=?", (data.memory_id,))
+                if not memory or memory["scope"] != data.scope or memory["scope_id"] != scope_id:
+                    raise HTTPException(404, "记忆不存在")
+                if memory["status"] != "active":
+                    raise Conflict("停用的记忆不能自动修改")
+                if data.expected_revision != memory["revision"]:
+                    raise Conflict("记忆已更新，请重新读取后整理")
+                if memory["content"] != data.content or memory["category"] != data.category:
+                    store.db.execute(
+                        "UPDATE memories SET content=?,category=?,revision=revision+1,source_task=?,updated=? WHERE id=?",
+                        (data.content, data.category, task["id"], time.time(), data.memory_id),
+                    )
+                memory = store.one("SELECT * FROM memories WHERE id=?", (data.memory_id,))
+            else:
+                disabled = store.one(
+                    "SELECT * FROM memories WHERE scope=? AND scope_id=? AND category=? AND content=? AND status='disabled'",
+                    (data.scope, scope_id, data.category, data.content),
+                )
+                if disabled:
+                    raise Conflict("这条记忆已停用，可在记忆页重新启用")
+                memory = insert_memory(
+                    data.scope, scope_id, data.category, data.content, "active", task["agent_id"], task["id"]
+                )
+            if data.scope == "project":
+                store.event(task["project_id"], task["id"], "memory", f"自动整理项目记忆：{data.category}")
+            return receipt_write(receipt_actor, "automatic-memory", request_id, body, memory)
+
+    @app.post("/api/runs/memories/consolidate")
+    def run_memory_consolidate(data: MemoryConsolidation, request: Request):
+        with store.tx():
+            task, _ = run(request)
+            if task["kind"] != "leader" or not store.one(
+                "SELECT task_id FROM conversation_origins WHERE task_id=?", (task["id"],)
+            ):
+                raise Conflict("只有处理成员对话的负责人可以整理记忆")
+            ids = [entry.id for entry in data.memories]
+            if len(set(ids)) != len(ids):
+                raise Conflict("不能重复合并同一条记忆")
+            rows = [store.one("SELECT * FROM memories WHERE id=?", (memory_id,)) for memory_id in ids]
+            if any(row is None for row in rows):
+                raise HTTPException(404, "记忆不存在")
+            owner = task["channel"].partition(":")[2] if task["channel"] != "shared" else None
+            scope, scope_id = rows[0]["scope"], rows[0]["scope_id"]
+            if not (
+                (scope == "project" and scope_id == task["project_id"]) or (scope == "member" and scope_id == owner)
+            ):
+                raise HTTPException(404, "记忆不存在")
+            if any(row["scope"] != scope or row["scope_id"] != scope_id for row in rows):
+                raise Conflict("只能合并同一范围的记忆")
+            if any(
+                row["status"] != "active" or row["revision"] != ref.revision for row, ref in zip(rows, data.memories)
+            ):
+                raise Conflict("记忆已更新，请重新读取后整理")
+            now = time.time()
+            store.db.execute(
+                "UPDATE memories SET content=?,category=?,revision=revision+1,source_task=?,updated=? WHERE id=?",
+                (data.content, data.category, task["id"], now, ids[0]),
+            )
+            for memory_id in ids[1:]:
+                store.db.execute(
+                    "UPDATE memories SET status='merged',revision=revision+1,updated=? WHERE id=?", (now, memory_id)
+                )
+            if scope == "project":
+                store.event(task["project_id"], task["id"], "memory", "已合并相关项目记忆，原条目仍可查看")
+            return store.one("SELECT * FROM memories WHERE id=?", (ids[0],))
 
     @app.post("/api/runs/tasks", status_code=201)
     def run_task(data: Task, request: Request):

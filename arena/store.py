@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import json
+import re
 import secrets
 import sqlite3
 import threading
@@ -89,6 +90,8 @@ class Store:
           content TEXT NOT NULL, status TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1,
           source_task TEXT, author_id TEXT NOT NULL, created REAL NOT NULL, updated REAL NOT NULL);
         CREATE INDEX IF NOT EXISTS memories_scope ON memories(scope,scope_id,status);
+        CREATE TABLE IF NOT EXISTS conversation_origins (
+          task_id TEXT PRIMARY KEY, message_id TEXT NOT NULL, member_id TEXT NOT NULL);
         CREATE INDEX IF NOT EXISTS tasks_project ON tasks(project_id, created);
         CREATE INDEX IF NOT EXISTS events_project ON events(project_id, id);
         """)
@@ -220,6 +223,26 @@ class Store:
             remaining -= len(row["content"])
             selected.append(row)
         return selected
+
+    def search_memories(self, project_id, member_id, query):
+        """Find relevant active memories beyond the bounded startup snapshot."""
+        terms = re.findall(r"[a-z0-9_]+|[\u4e00-\u9fff]+", query.lower())
+        keys = set()
+        for term in terms:
+            if all("\u4e00" <= char <= "\u9fff" for char in term) and len(term) > 2:
+                keys.update(term[index : index + 2] for index in range(len(term) - 1))
+            else:
+                keys.add(term)
+        if not keys:
+            return []
+        rows = self.all(
+            "SELECT id,scope,category,content,revision,source_task,updated FROM memories "
+            "WHERE status='active' AND ((scope='project' AND scope_id=?) OR (scope='member' AND scope_id=?))",
+            (project_id, member_id),
+        )
+        scored = [(sum(key in row["content"].lower() for key in keys), row) for row in rows]
+        scored.sort(key=lambda item: (item[0], item[1]["updated"]), reverse=True)
+        return [row for score, row in scored if score][:20]
 
     def reconcile(self, project_id, channel="shared"):
         """Resume coordination after completion or cancellation, in the caller's transaction."""
