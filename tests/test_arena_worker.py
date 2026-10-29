@@ -1422,6 +1422,43 @@ def test_existing_conversation_response_can_submit_summary():
     )
 
 
+def test_stale_summary_action_keeps_normal_conversation_reply():
+    from unittest.mock import Mock
+
+    from arena.worker import APIError
+
+    api = Mock()
+    api.request.side_effect = APIError(409, "对话摘要已更新")
+    response = json.dumps(
+        {
+            "summary": "我已根据刚才的补充改好方案。",
+            "arena_actions": [
+                {
+                    "action": "save_conversation_summary",
+                    "summary": "过期摘要",
+                    "through_id": "message-20",
+                    "expected_revision": 3,
+                }
+            ],
+        },
+        ensure_ascii=False,
+    )
+    assert relay_actions(response, api) == "我已根据刚才的补充改好方案。"
+    api.request.assert_called_once_with(
+        "POST",
+        "/api/runs/conversation-summary",
+        {"summary": "过期摘要", "through_id": "message-20", "expected_revision": 3},
+    )
+
+    api.request.side_effect = APIError(409, "记忆冲突")
+    memory_action = json.dumps(
+        {"summary": "回复", "arena_actions": [{"action": "remember", "content": "偏好"}]},
+        ensure_ascii=False,
+    )
+    with pytest.raises(APIError):
+        relay_actions(memory_action, api)
+
+
 def test_cli_parser_separates_codex_progress_and_reassembles_gemini_chunks():
     packet = '{"summary":"done","arena_actions":[]}'
     codex = [

@@ -1239,6 +1239,10 @@ def relay_actions(result, api):
             route = "/api/runs/tasks/" + safe_component(action.pop("task_id", "")) + "/recover"
         try:
             response = api.request("POST", route, action)
+        except APIError as exc:
+            if name == "save_conversation_summary" and exc.status_code == 409:
+                continue
+            raise
         except httpx.HTTPError as exc:
             raise WorkerError(
                 "Arena action response was lost; its outcome is unknown and it was not repeated",

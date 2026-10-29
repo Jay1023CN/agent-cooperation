@@ -1104,14 +1104,18 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
                 task["project_id"] != memory["scope_id"] or task["channel"] != "shared"
             ):
                 return {"memory_id": memory_id, "task": None, "message": None}
-            if memory["scope"] == "member" and task["channel"] != f'personal:{actor["id"]}':
-                return {"memory_id": memory_id, "task": None, "message": None}
             origin = store.one(
-                "SELECT o.message_id,m.author,COALESCE(arena_message_text(p.payload),m.content) AS content,"
+                "SELECT o.message_id,o.member_id,m.author,COALESCE(arena_message_text(p.payload),m.content) AS content,"
                 "m.channel,m.created FROM conversation_origins o JOIN messages m ON m.id=o.message_id "
                 "LEFT JOIN message_payloads p ON p.message_id=m.id WHERE o.task_id=? AND m.project_id=?",
                 (task_id, task["project_id"]),
             )
+            if memory["scope"] == "member" and (
+                not origin
+                or origin["member_id"] != actor["id"]
+                or task["channel"] not in ("shared", f'personal:{actor["id"]}')
+            ):
+                return {"memory_id": memory_id, "task": None, "message": None}
             return {
                 "memory_id": memory_id,
                 "task": task,

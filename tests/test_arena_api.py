@@ -647,8 +647,12 @@ def test_leader_automatically_remembers_and_updates_from_member_conversation(are
         json={"scope": "member", "category": "preference", "content": "喜欢简洁的回复"},
     ).json()
     assert personal["scope_id"] == member_id and personal["status"] == "active"
+    source = client.get(f'/api/memories/{personal["id"]}/source').json()
+    assert source["task"]["channel"] == "shared"
+    assert source["message"]["content"] == "这个项目我喜欢大胆的界面"
     partner = client.post("/api/invites", json={"name": "Partner", "kind": "member"}).json()
     partner_auth = {"Authorization": "Bearer " + partner["token"]}
+    assert client.get(f'/api/memories/{personal["id"]}/source', headers=partner_auth).status_code == 404
     assert (
         client.get(f'/api/projects/{p["id"]}/memories', headers=partner_auth, params={"scope": "member"}).json()[
             "memories"
