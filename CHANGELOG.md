@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.14.0 (2026-10-29)
+
+### Features
+
+- 从日常对话自动整理长期记忆
+  ([`addc318`](https://github.com/Jay1023CN/agent-cooperation/commit/addc3183c31e565bee84d23381d498c36168b556))
+
+
 ## v1.13.0 (2026-10-29)
 
 ### Documentation
