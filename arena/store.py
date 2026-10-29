@@ -174,8 +174,9 @@ class Store:
     def save_message(self, message_id, project_id, author, content, channel, created):
         raw = content.encode("utf-8")
         compressed = zlib.compress(raw) if len(raw) >= 4096 else b""
-        use_compression = bool(compressed) and len(compressed) + 1024 < len(raw)
-        preview = content[:512] if use_compression else content
+        preview = content[:512]
+        use_compression = bool(compressed) and len(compressed) + len(preview.encode("utf-8")) + 64 < len(raw)
+        preview = preview if use_compression else content
         self.db.execute(
             "INSERT INTO messages VALUES(?,?,?,?,?,?)", (message_id, project_id, author, preview, channel, created)
         )

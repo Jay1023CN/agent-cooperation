@@ -778,6 +778,7 @@ def test_long_new_messages_are_compressed_without_losing_search_or_full_text(are
     )
     assert row["payload"] is not None and len(row["payload"]) < len(content.encode("utf-8")) // 10
     assert len(row["content"]) == 512
+    assert len(row["payload"]) + len(row["content"].encode("utf-8")) + 64 < len(content.encode("utf-8"))
     machine_auth, _ = machine(client, roles=["leader"])
     _, auth = claim(client, machine_auth)
     history = client.get("/api/runs/history", headers=auth, params={"q": "唯一检索词"}).json()["messages"]
