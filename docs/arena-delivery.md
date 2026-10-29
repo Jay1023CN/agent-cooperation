@@ -221,11 +221,11 @@ npm run dev
 
 Windows 使用 `.\pal-arena\pal-arena.exe internal-agent-link --multica-config`。输出中的绝对路径对应当前安装位置，移动程序后需重新生成。这一步只生成配置，不发送模型任务。Arena 内部任务自己的 MCP 入口由 worker 配置；原 PAL 的其他模型工具仍使用源码安装中的 `pal-mcp-server`，不应把它的 API Key 配置当成 Arena 工作机令牌。
 
-## WorkBuddy 桌面 MCP
+## 桌面客户端 MCP
 
-这条路径让已登录的 WorkBuddy 桌面客户端作为共享任务执行成员，不需要读取桌面客户端凭据、申请模型 API Key 或调用 WorkBuddy 云任务。桌面会话要由人启动并主动调用工具，不能自动唤醒关闭的客户端；配置中的模型与能力需要和客户端实际选择保持一致。
+这条路径让支持 MCP 的已登录桌面客户端作为共享任务执行成员，通过中心连接其他电脑。桌面会话主动领取任务，配置中的能力需要和客户端实际情况保持一致。
 
-1. 在工作台「伙伴与电脑」为这个桌面执行端**新建专属电脑令牌**，不要复用普通 worker 的令牌。选择「WorkBuddy 桌面 · MCP」，启用唯一的执行成员，保持单槽，下载 `worker.json`。使用独立的工作目录，例如 `~/.pal-arena/workbuddy-workspaces`。
+1. 在工作台「伙伴与电脑」为这个桌面执行端新建专属电脑令牌。选择「桌面客户端 · MCP」，启用一个执行成员，保持单槽，下载 `worker.json`。每台电脑使用自己的令牌和工作目录。
 2. 将上一步令牌单独保存为本机用户目录里的文本文件，例如 `~/.pal-arena/workbuddy-token.txt`；不要把令牌写进仓库、MCP 配置或聊天。macOS 可对该文件执行 `chmod 600 ~/.pal-arena/workbuddy-token.txt`。Windows 请使用该用户的个人目录并限制文件访问权限。
 3. 用该机器上实际存在的绝对路径生成 MCP 配置。原生包示例：
 
@@ -235,11 +235,11 @@ Windows 使用 `.\pal-arena\pal-arena.exe internal-agent-link --multica-config`�
    ```
 
    Windows 使用 `.\pal-arena\pal-arena.exe internal-desktop-mcp` 和 Windows 绝对路径。源码安装使用对应虚拟环境的 `python -m arena.desktop_mcp`，参数相同。生成的配置只含文件路径，不含令牌内容；移动程序、配置或令牌文件后需重新生成。
-4. 将输出的 `pal-arena-desktop` 条目合并到 WorkBuddy 的用户 MCP 配置 `~/.workbuddy/mcp.json`（或按官方说明配置到项目的 `.workbuddy/mcp.json`），保留已有 MCP 条目。重新加载客户端，并在一个专门的**共享工作会话**中要求它调用 `next_task`。如果没有可领取的共享任务，工具会返回空状态；准备较慢时可再次调用。
-5. 任务返回后检查标题、需求版本和显示的工作目录。文件工具使用该目录；命令及修改执行配置需要在平台任务详情中逐次确认。客户端完成后必须调用 `submit_result`，附带本次返回的 handle、nonce、需求版本以及实际文件和验证说明。平台再捕获 Git 提交、收集 `arena-exports/` 并安排其他成员独立验收；提交本身不等于验收通过。
+4. 将输出的 `pal-arena-desktop` 条目加入所选桌面客户端的 MCP 配置，保留已有条目。重新加载客户端，在共享工作会话中调用 `next_task`。例如 WorkBuddy 可使用 `~/.workbuddy/mcp.json`；其他客户端使用各自的 MCP 配置入口。
+5. 任务返回后检查标题、需求版本和工作目录。工作期间可调用 `task_status(handle, wait_seconds)` 等待状态变化；返回 `stopped` 后停止修改。平台停止任务或连接失效时，桥会拒绝后续 MCP 文件操作，并停止它启动的命令。桌面客户端自己在 MCP 之外启动的操作仍由客户端控制。完成后调用 `submit_result`，平台再捕获 Git 提交、收集 `arena-exports/` 并安排其他成员独立验收。
 
 一个 MCP 进程一次只接一个任务，不会自动把它再交给第二个会话。如果领取结果丢失，`next_task` 会给出当前任务 ID 与尝试次数；先确保原桌面会话已停止，再用 `resume_task` 请求恢复，并在平台确认，避免两边同时写同一工作区。进程退出或失联后先检查平台和本机工作区，系统不会自动重发结果不明的写任务。
 
-不要把私人对话内容放进这个共享会话；服务端不会将个人任务、个人记忆或私人聊天派给此执行端，但不能清除 WorkBuddy 自己已有的对话历史。桌面身份与普通 worker 在平台中是不同执行身份；若需要跨身份读取代码，使用 GitHub 同步工作分支。经确认的命令继承基础系统环境，不自动继承常见 API Key 等其他环境变量；命令以当前系统用户执行，工作目录校验不是操作系统沙箱。
+桌面身份与普通 worker 在平台中是不同执行身份；若需要跨身份读取代码，使用 GitHub 同步工作分支。共享任务不会包含个人任务和个人记忆，客户端自己已有的对话历史仍由客户端管理。
 
 已用模拟桌面客户端通过真实 MCP stdio 和本地平台 API 验证领取、文件提交与验收排队，并验证平台命令审批；尚未在你的 WorkBuddy、账号、Mac 或 Windows 上完成真实联调。官方客户端配置入口见 [WorkBuddy MCP 指南](https://www.workbuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/MCP-Guide)。

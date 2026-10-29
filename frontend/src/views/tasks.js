@@ -11,6 +11,19 @@ import {
 } from '../components/ui.js';
 import { renderTaskTimeline, taskTimelineEvents, taskTimelineCursor } from './task-timeline.js';
 
+export function blenderCheckSummary(check) {
+  if (!check || (!Array.isArray(check.files) && check.state !== 'failed')) return '';
+  if (check.state === 'verified')
+    return `<div class="detail-section"><h3>Blender 文件检查</h3><p>已打开 ${check.files.length} 个项目文件。</p>${check.files.map((file) => `<p>${e(file?.name)} · Blender ${e(file?.version)} · ${e(file?.scenes)} 个场景 · ${e(file?.objects)} 个对象</p>`).join('')}</div>`;
+  if (check.state === 'unavailable')
+    return '<div class="detail-section"><h3>Blender 文件检查</h3><p>执行电脑没有找到 Blender，文件需要由验收成员打开检查。</p></div>';
+  if (check.state === 'failed')
+    return `<div class="detail-section"><h3>Blender 文件检查</h3><p>${e(check.reason || '项目文件无法打开。')}</p></div>`;
+  if (check.state === 'no_blend')
+    return '<div class="detail-section"><h3>Blender 文件检查</h3><p>成果文件中没有 .blend 项目。</p></div>';
+  return '';
+}
+
 export function createTaskDialogs({
   getState,
   project,
@@ -115,7 +128,7 @@ export function createTaskDialogs({
         asArray(task.acceptance)
           .map((item) => `<li>${e(item)}</li>`)
           .join('') || '<li>尚未设置</li>'
-      }</ul></div>${task.result ? `<div class="detail-section"><h3>运行结果</h3><p>${e(task.result)}</p></div>` : ''}${task.evidence && Object.keys(task.evidence).length ? `<div class="detail-section"><h3>代码、文件和验证证据</h3>${evidenceLinks(task)}<pre>${e(JSON.stringify(task.evidence, null, 2))}</pre></div>` : ''}${task.review ? `<div class="detail-section"><h3>独立验收</h3><p>${e(task.review.summary)}</p><pre>${e(JSON.stringify(task.review.evidence || [], null, 2))}</pre></div>` : ''}${
+      }</ul></div>${task.result ? `<div class="detail-section"><h3>运行结果</h3><p>${e(task.result)}</p></div>` : ''}${blenderCheckSummary(task.evidence?.blender_check)}${task.evidence && Object.keys(task.evidence).length ? `<div class="detail-section"><h3>代码、文件和验证证据</h3>${evidenceLinks(task)}<pre>${e(JSON.stringify(task.evidence, null, 2))}</pre></div>` : ''}${task.review ? `<div class="detail-section"><h3>独立验收</h3><p>${e(task.review.summary)}</p><pre>${e(JSON.stringify(task.review.evidence || [], null, 2))}</pre></div>` : ''}${
         permissions.length && task.status === 'running'
           ? `<div class="detail-section"><h3>成员正在等待操作授权</h3>${permissions
               .map(

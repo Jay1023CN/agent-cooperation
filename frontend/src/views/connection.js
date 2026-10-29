@@ -42,7 +42,7 @@ export const providerInfo = {
     existing: false,
   },
   desktop_mcp: {
-    label: 'WorkBuddy 桌面 · MCP',
+    label: '桌面客户端 · MCP',
     note: '在已登录的桌面客户端主动领取共享任务；需独立电脑令牌、单个执行成员和单槽。任务提交后仍由其他成员验收。',
     existing: false,
   },
@@ -260,7 +260,7 @@ export function collectWorkerConfig(name = 'My computer') {
   if (!Number.isInteger(slots) || slots < 1 || slots > 8) throw new Error('并发上限应在 1 到 8 之间。');
   if (agents.some((agent) => agent.provider === 'desktop_mcp')) {
     if (agents.length !== 1 || slots !== 1 || agents[0].roles[0] !== 'worker' || agents[0].mode !== 'new')
-      throw new Error('WorkBuddy 桌面 MCP 需要单独的电脑令牌、一个执行成员、单槽和新建任务会话。');
+      throw new Error('桌面 MCP 需要单独的电脑令牌、一个执行成员和单槽。');
   }
   return {
     server: parsed.origin,
@@ -283,7 +283,7 @@ export function workerCommands(config, os, install) {
   if (desktop)
     return {
       command: `${install === 'native' ? native + ' internal-desktop-mcp' : python + ' -m arena.desktop_mcp'} --config worker.json --token-file "<令牌文件路径>" --print-mcp-config`,
-      hint: '将专属令牌单独保存为本机文件，替换上面的路径。把生成的 MCP 配置加入 WorkBuddy，再在共享会话中调用 next_task。',
+      hint: '将专属令牌单独保存为本机文件，替换上面的路径。把生成的 MCP 配置加入桌面客户端，再在共享会话中调用 next_task。',
     };
   const token = windows
     ? "$env:ARENA_MACHINE_TOKEN = '<电脑专属令牌>'"

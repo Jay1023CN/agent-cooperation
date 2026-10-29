@@ -249,3 +249,83 @@ def test_desktop_does_not_repeat_a_claim_whose_response_was_lost(desktop):
     assert len(attempts) == 1
     assert store.task(task["id"])["status"] == "running"
     assert store.task(task["id"])["attempt"] == 1
+
+
+def test_desktop_wait_observes_cancellation_and_rejects_further_operations(desktop):
+    bridge, member, store, project, _ = desktop
+    task = member.post(
+        f'/api/projects/{project["id"]}/tasks', json={"title": "Cancel", "prompt": "Work in the task folder"}
+    ).json()
+    claimed = bridge.next_task()
+    assert claimed["state"] == "ready"
+    assert bridge.task_status(claimed["handle"])["state"] == "running"
+    answer = {}
+    waiter = threading.Thread(target=lambda: answer.update(bridge.task_status(claimed["handle"], 25)))
+    waiter.start()
+    try:
+        assert member.post(f'/api/tasks/{task["id"]}/cancel').status_code == 200
+        waiter.join(25)
+        assert not waiter.is_alive()
+        assert answer["state"] == "stopped"
+        with pytest.raises(WorkerError, match="no longer accepts"):
+            bridge.resource(claimed["handle"], "fs/write_text_file", {"path": "late.txt", "content": "late"})
+        assert store.task(task["id"])["status"] == "cancelled"
+    finally:
+        waiter.join(25)
+
+
+def test_two_desktop_machines_keep_task_handles_and_cancellation_separate(desktop, tmp_path):
+    first, member, store, project, _ = desktop
+    invite = member.post("/api/invites", json={"name": "Second desktop", "kind": "machine"}).json()
+    config = json.loads(json.dumps(first.config))
+    config.update(name="Second desktop", workspace_root=str(tmp_path / "second-workspaces"))
+    second = DesktopBridge(config, invite["token"])
+    try:
+        for title in ("First work", "Second work"):
+            assert (
+                member.post(
+                    f'/api/projects/{project["id"]}/tasks', json={"title": title, "prompt": "Work independently"}
+                ).status_code
+                == 201
+            )
+        a = first.next_task()
+        b = second.next_task()
+        assert a["state"] == b["state"] == "ready"
+        assert a["task_id"] != b["task_id"] and a["workspace"] != b["workspace"]
+        with pytest.raises(WorkerError, match="Unknown desktop task handle"):
+            second.resource(a["handle"], "fs/read_text_file", {"path": "test.txt"})
+        assert member.post(f'/api/tasks/{a["task_id"]}/cancel').status_code == 200
+        assert first.task_status(a["handle"], 25)["state"] == "stopped"
+        assert second.task_status(b["handle"])["state"] == "running"
+        second.resource(b["handle"], "fs/write_text_file", {"path": "test.txt", "content": "independent"})
+        second.submit(b["handle"], b["nonce"], b["requirement_revision"], "Finished second task")
+        assert second.handoff["done"].wait(15)
+        assert store.task(b["task_id"])["status"] == "in_review"
+    finally:
+        second.close()
+
+
+def test_desktop_blender_result_reaches_task_evidence(desktop, monkeypatch):
+    bridge, member, store, project, _ = desktop
+    bridge.config["agents"][0]["capabilities"] = ["blender"]
+    task = member.post(
+        f'/api/projects/{project["id"]}/tasks',
+        json={"title": "Blender scene", "prompt": "Create a scene", "capability": "blender"},
+    ).json()
+    calls = []
+
+    def inspect(workspace, configured, cancel, run):
+        calls.append(workspace)
+        return {"state": "verified", "files": [{"name": "scene.blend", "version": "4.5", "scenes": 1, "objects": 1}]}
+
+    monkeypatch.setattr("arena.worker.verify_exports", inspect)
+    monkeypatch.setattr("arena.desktop_mcp.verify_exports", inspect)
+    claim = bridge.next_task()
+    assert claim["state"] == "ready", store.task(task["id"])
+    assert bridge.inspect_blender_exports(claim["handle"])["state"] == "verified"
+    bridge.resource(claim["handle"], "fs/write_text_file", {"path": "scene.txt", "content": "scene"})
+    bridge.submit(claim["handle"], claim["nonce"], claim["requirement_revision"], "Created scene")
+    assert bridge.handoff["done"].wait(15)
+    stored = store.task(task["id"])
+    assert calls and stored["evidence"]["blender_check"]["state"] == "verified"
+    assert stored["status"] == "in_review"

@@ -23,7 +23,8 @@ from mcp.server.fastmcp import FastMCP
 from agent_link.acp_client import ClientResources
 from agent_link.common import BridgeError
 
-from .worker import API, RunCancelled, Worker, WorkerError, load_config
+from .blender import BlenderCheckError, verify_exports
+from .worker import API, RunCancelled, Worker, WorkerError, load_config, run_process
 from .workspaces import workspace_lock
 
 
@@ -171,6 +172,7 @@ class DesktopBridge:
             "instructions": (
                 "这是共享项目任务。只在上面的工作区工作，优先使用本 MCP 的文件和命令工具；"
                 "命令和执行配置修改需由平台成员确认。完成后调用 submit_result；"
+                "工作期间调用 task_status 查看是否停止，收到 stopped 后立即停止修改。"
                 "聊天里的完成声明不会提交任务，提交后还需要其他成员独立验收。"
             ),
         }
@@ -185,6 +187,7 @@ class DesktopBridge:
             "task_id": task["id"],
             "attempt": task["attempt"],
             "revision": task["revision"],
+            "capability": task.get("capability"),
             "workspace": Path(workspace).resolve(),
             "prompt": prompt,
             "cancel": cancel,
@@ -305,6 +308,27 @@ class DesktopBridge:
         self._session(session["handle"])
         return self._payload(session)
 
+    def task_status(self, handle, wait_seconds=0):
+        """Wait for a task to stop or submit, using the existing run cancellation signal."""
+        if isinstance(wait_seconds, bool) or not isinstance(wait_seconds, (int, float)) or not 0 <= wait_seconds <= 25:
+            raise WorkerError("wait_seconds must be between 0 and 25")
+        session = self._session(handle, active=False)
+        deadline = time.monotonic() + wait_seconds
+        while True:
+            with session["state_lock"]:
+                if session["cancel"].is_set():
+                    state = "stopped"
+                elif session["submitted"].is_set():
+                    state = "stopped" if session.get("error") else "submitted"
+                elif not session["accepting"].is_set():
+                    state = "stopped"
+                else:
+                    state = "running"
+            remaining = deadline - time.monotonic()
+            if state != "running" or remaining <= 0:
+                return {"state": state, "task_id": session["task_id"], "attempt": session["attempt"]}
+            session["cancel"].wait(min(0.25, remaining))
+
     @staticmethod
     def _path(session, path):
         if not isinstance(path, str) or not path or "\0" in path:
@@ -319,6 +343,19 @@ class DesktopBridge:
         if "cwd" in params:
             params["cwd"] = self._path(session, params["cwd"])
         return session["resources"].request(method, {"sessionId": handle, **params})
+
+    def inspect_blender_exports(self, handle):
+        session = self._session(handle)
+        if session["capability"] != "blender":
+            raise WorkerError("Blender inspection is available for Blender tasks")
+        try:
+            result = verify_exports(
+                session["workspace"], self.config.get("blender_executable"), session["cancel"], run_process
+            )
+        except BlenderCheckError as exc:
+            raise WorkerError(str(exc)) from exc
+        self._session(handle)
+        return result
 
     def propose_memory(self, handle, content, category):
         session = self._session(handle)
@@ -404,6 +441,16 @@ def build_server(bridge):
     def resume_task(task_id: str, attempt: int) -> dict:
         """Recover a lost handoff after a member confirms the previous conversation has stopped."""
         return bridge.resume_task(task_id, attempt)
+
+    @mcp.tool()
+    def task_status(handle: str, wait_seconds: float = 0) -> dict:
+        """Check or wait up to 25 seconds for this task to stop or be submitted."""
+        return bridge.task_status(handle, wait_seconds)
+
+    @mcp.tool()
+    def inspect_blender_exports(handle: str) -> dict:
+        """Open exported .blend projects with local Blender and return inspection details."""
+        return bridge.inspect_blender_exports(handle)
 
     @mcp.tool()
     def write_file(handle: str, path: str, content: str) -> dict:

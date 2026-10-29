@@ -78,6 +78,7 @@ async def test_desktop_stdio_client_can_deliver_to_independent_review(tmp_path):
             assert {"next_task", "read_file", "write_file", "start_command", "submit_result"} <= names
             job = unpack(await session.call_tool("next_task", {}, read_timeout_seconds=timedelta(seconds=40)))
             assert job["state"] == "ready" and job["task_id"] == task["id"]
+            assert unpack(await session.call_tool("task_status", {"handle": job["handle"]}))["state"] == "running"
             assert token not in json.dumps(job)
             unpack(
                 await session.call_tool(

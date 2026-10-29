@@ -26,9 +26,16 @@ def diagnose(config_path=None, *, probe_transport=True):
             add(package, "error", "Missing runtime package; reinstall the platform bundle")
     from agent_link.device_setup import find_tailscale
 
+    from .blender import find_blender
+
     for name in ("git", "tailscale", "blender"):
         # The Tailscale CLI often lives inside its app bundle or Program Files rather than on PATH.
-        found = bool(find_tailscale() if name == "tailscale" else shutil.which(name))
+        if name == "tailscale":
+            found = bool(find_tailscale())
+        elif name == "blender":
+            found = bool(find_blender())
+        else:
+            found = bool(shutil.which(name))
         note = {
             "git": "Required for code workspaces",
             "tailscale": "Optional for access between your computers",
@@ -47,6 +54,15 @@ def diagnose(config_path=None, *, probe_transport=True):
             add("worker_config", "error", "Configuration could not be loaded; check JSON format and required fields")
             config = None
         if config:
+            if config.get("blender_executable"):
+                found = bool(find_blender(config["blender_executable"]))
+                blender_check = next(check for check in checks if check["name"] == "blender")
+                blender_check.update(
+                    state="ok" if found else "warning",
+                    detail=(
+                        "Configured Blender executable found." if found else "Configured Blender executable not found."
+                    ),
+                )
             for agent in config["agents"]:
                 readiness = inspect_agent(agent, probe_transport=probe_transport)
                 agents.append(

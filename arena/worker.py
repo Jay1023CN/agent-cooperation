@@ -33,6 +33,7 @@ from agent_link.github_identity import GitHubIdentityError
 from agent_link.server import Agents
 
 from . import github as github_accounts
+from .blender import BlenderCheckError, verify_exports
 
 CLI_PROVIDERS = {"codex", "claude", "gemini"}
 PAL_PROVIDERS = set(Agents.names)
@@ -329,6 +330,10 @@ def load_config(path: str) -> dict:
     config.setdefault("slots", 2)
     config.setdefault("workspace_root", str(Path.home() / ".pal-arena" / "workspaces"))
     config.setdefault("storage_limit_bytes", 5_000_000_000)
+    if "blender_executable" in config and (
+        not isinstance(config["blender_executable"], str) or not config["blender_executable"].strip()
+    ):
+        raise WorkerError("blender_executable must be a nonempty executable path or command")
     if not isinstance(config["slots"], int) or not 1 <= config["slots"] <= 8:
         raise WorkerError("slots must be between 1 and 8")
     if not isinstance(config["storage_limit_bytes"], int) or config["storage_limit_bytes"] <= 0:
@@ -1698,6 +1703,20 @@ class Worker:
             if agent.get("mode") == "existing":
                 path, branch = snapshot_desktop(path, job, self.root, cancelled)
                 evidence["workspace"] = str(path)
+            if job["task"]["kind"] == "worker" and job["task"].get("capability") == "blender":
+                try:
+                    blender_check = verify_exports(
+                        artifact_workspace, self.config.get("blender_executable"), cancelled, run_process
+                    )
+                except BlenderCheckError as exc:
+                    raise WorkerError(
+                        str(exc), evidence={"blender_check": {"state": "failed", "reason": str(exc)}}
+                    ) from exc
+                evidence["blender_check"] = blender_check
+                if blender_check["state"] == "verified":
+                    log(f"Blender 已打开并检查 {len(blender_check['files'])} 个项目文件。\n")
+                elif blender_check["state"] == "unavailable":
+                    log("未找到 Blender，项目文件将交由验收成员检查。\n")
             evidence.update(
                 capture_git(
                     path,

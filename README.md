@@ -204,11 +204,11 @@ py -3 -m venv .venv
 | Antigravity | 本机桌面 RPC | 可用；可新建会话，也可接续指定的已有会话 |
 | OpenCode | 本机 HTTP 服务 | 可用 |
 | DeepSeek Harness（DSH） | ACP，新建任务会话，可指定自己的 profile | v1.9.0 新增；协议测试通过，真实模型路由待联调 |
-| WorkBuddy | 桌面 MCP，由已登录的桌面会话主动领取任务 | 原型；真实客户端待实机验证 |
+| 支持 MCP 的桌面客户端 | 各电脑使用独立令牌，由桌面会话主动领取共享任务 | 支持工作区、状态查询、停止和提交验收 |
 | GLM 等模型 | 由承载它的客户端选择 | 模型名本身不是可执行程序 |
-| Blender | 派给装了 Blender 的电脑，产出 `.blend` 和导出文件 | 专用适配待联调 |
+| Blender | 派给有 Blender 能力的电脑，产出 `.blend` 和导出文件 | 已接入本机打开检查，见 [Blender 任务](docs/arena-blender.md) |
 
-另外保留了上游 PAL 的 `clink` 工具和 [PAL Agent Link](docs/agent-link.md)：可以在任意 MCP 客户端里直接调用本机其他代理，也能为 [Multica](https://github.com/multica-ai/multica) 生成 MCP 配置。
+另外保留了上游 PAL 的 `clink` 工具和 [PAL Agent Link](docs/agent-link.md)，可以在 MCP 客户端里调用本机其他代理。
 
 **DSH 接的是 harness。** 模型和供应商在 DSH 中配置，平台不写死 DeepSeek 官方模型。DSH 自带 ACP profile 有自己的初始路由，使用前需配置成你要用的路由；详见 [DSH 接入说明](docs/dsh-harness.md)。
 
@@ -227,9 +227,8 @@ py -3 -m venv .venv
 - [x] DSH ACP 适配与自定义 profile 配置
 - [x] Windows x64 / macOS ARM64 原生包与 Mac 安装助手，GitHub 直接发布附件
 - [ ] 多台实机、真实订阅下的端到端联调
-- [ ] WorkBuddy 与 Multica 的状态回写
 - [x] 已有 Claude 桌面会话通过 MCP 真实领取、修改 UI、回传提交，再由 Codex 独立验收（[记录](docs/desktop-handoff.md#真实桌面验证)）
-- [ ] Blender 专用适配和可打开产物的自动检查
+- [x] Blender 项目文件自动打开检查、检查结果与任务证据
 
 本版验证记录：
 
@@ -240,7 +239,7 @@ py -3 -m venv .venv
 | 原生包构建与启动 | [Windows、Mac 两端通过，校验后直接发布](https://github.com/Jay1023CN/agent-cooperation/actions/runs/40816030680) |
 | 真实 Claude 桌面会话 | [已完成代码交接与独立验收](docs/desktop-handoff.md#真实桌面验证)；可选通知只支持已运行的会话 |
 
-自动化测试使用临时 Git 仓库、假 CLI 和协议夹具，不消耗真实订阅。DSH 真实模型、多机真实订阅的完整任务链路、WorkBuddy 桌面执行和 Blender 专用适配仍需实机联调。
+自动化测试使用临时 Git 仓库、假 CLI 和协议夹具，不消耗真实订阅。DSH 真实模型、多机真实订阅的完整任务链路、WorkBuddy 桌面执行和 Blender 实际打开检查仍需实机联调。
 
 ## 项目结构
 
@@ -264,7 +263,7 @@ docs/          说明文档
 | 配置客户端与账号 | [DSH harness](docs/dsh-harness.md) · [Agent Link](docs/agent-link.md) · [GitHub 登录与推送](docs/github-login.md) |
 | 了解任务规则 | [产品规格](docs/arena-product.md) · [模型分配、记忆与代码交接](docs/arena-routing-memory.md) |
 | 维护、备份与恢复 | [维护文档](docs/arena-maintenance.md) · [跨电脑占用记录](docs/coordination.md) |
-| 桌面交接与 Multica | [桌面交接](docs/desktop-handoff.md) · [Multica 接入](docs/multica.md) · [整合方案](docs/multica-integration-plan.md) |
+| 桌面交接和 Blender | [桌面交接](docs/desktop-handoff.md) · [Blender 任务](docs/arena-blender.md) |
 | 查看版本变化 | [Release](https://github.com/Jay1023CN/agent-cooperation/releases) · [更新记录](CHANGELOG.md) |
 
 ## 来源与许可

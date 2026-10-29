@@ -190,11 +190,11 @@ To look around first, choose the demo on the sign-in page or open `/?demo=1`.
 | Antigravity | Local desktop RPC | Usable; can start a new session or continue a specified existing one |
 | OpenCode | Local HTTP service | Usable |
 | DeepSeek Harness (DSH) | ACP task sessions, with an optional custom profile | Added in v1.9.0; protocol tests pass, real model routes await testing |
-| WorkBuddy | Desktop MCP, the logged-in desktop session pulls tasks | Prototype; real client not yet verified on real machines |
+| MCP-capable desktop clients | Each computer uses its own token; a desktop session claims shared work | Workspace, status, stop and review submission supported |
 | GLM and other models | Chosen in whichever client hosts them | A model name is not an executable |
-| Blender | Assign to a computer with Blender; outputs `.blend` and exports | Dedicated adapter not yet integrated |
+| Blender | Assign to a computer with Blender; outputs `.blend` and exports | Local open checks available; see [Blender tasks](docs/arena-blender.md) |
 
-The upstream PAL `clink` tool and [PAL Agent Link](docs/agent-link.md) are kept: call other local agents from any MCP client, or generate MCP configs for [Multica](https://github.com/multica-ai/multica).
+The upstream PAL `clink` tool and [PAL Agent Link](docs/agent-link.md) are kept for calling other local agents from an MCP client.
 
 **DSH connects as a harness.** Configure models and providers in DSH; Agent Cooperation does not hardcode a DeepSeek official model. The bundled ACP profile has its own initial route, so configure it for your intended provider before use. See [DSH setup](docs/dsh-harness.md).
 
@@ -213,9 +213,8 @@ The upstream PAL `clink` tool and [PAL Agent Link](docs/agent-link.md) are kept:
 - [x] DSH ACP support and custom profile configuration
 - [x] Windows x64 / macOS ARM64 packages and a Mac helper, published directly from GitHub
 - [ ] End-to-end runs on several real machines with real subscriptions
-- [ ] WorkBuddy and Multica status write-back
 - [x] An existing Claude Desktop session received an MCP task, changed UI code and returned commits for independent Codex acceptance ([record](docs/desktop-handoff.md#真实桌面验证))
-- [ ] Dedicated Blender adapter and automatic checks that artifacts open
+- [x] Automatic Blender project open checks and task evidence
 
 Verification for this release:
 
@@ -226,7 +225,7 @@ Verification for this release:
 | Native builds and startup | [Both platforms passed; assets verified and published](https://github.com/Jay1023CN/agent-cooperation/actions/runs/40816030680) |
 | Existing Claude desktop session | [Code handoff and independent acceptance verified](docs/desktop-handoff.md#真实桌面验证); optional notification only targets running sessions |
 
-Automated tests use temporary Git repositories, fake CLIs and protocol fixtures without consuming real subscriptions. Real DSH model routes, the complete multi-machine subscription workflow, WorkBuddy desktop execution and the dedicated Blender adapter still need device testing.
+Automated tests use temporary Git repositories, fake CLIs and protocol fixtures without consuming real subscriptions. Real DSH model routes, the complete multi-machine subscription workflow, WorkBuddy desktop execution and Blender open checks still need device testing.
 
 ## Project layout
 
@@ -250,7 +249,7 @@ Start UI changes in `frontend/`; see the [frontend notes](frontend/README.md).
 | Configure clients and accounts | [DSH harness](docs/dsh-harness.md) · [Agent Link](docs/agent-link.md) · [GitHub sign-in](docs/github-login.md) |
 | Understand task rules | [Product spec](docs/arena-product.md) · [Routing, memory and handoff](docs/arena-routing-memory.md) |
 | Maintain and restore | [Maintenance and backups](docs/arena-maintenance.md) · [Occupancy registry](docs/coordination.md) |
-| Desktop handoff and Multica | [Desktop handoff](docs/desktop-handoff.md) · [Multica](docs/multica.md) · [Integration plan](docs/multica-integration-plan.md) |
+| Desktop handoff and Blender | [Desktop handoff](docs/desktop-handoff.md) · [Blender tasks](docs/arena-blender.md) |
 | Track releases | [Releases](https://github.com/Jay1023CN/agent-cooperation/releases) · [Changelog](CHANGELOG.md) |
 
 Most documentation is currently in Chinese; issues in English are welcome.
