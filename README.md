@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Jay1023CN/agent-cooperation/releases/tag/v1.12.0">下载 v1.12.0</a> ·
+  <a href="https://github.com/Jay1023CN/agent-cooperation/releases/tag/v1.16.1">下载 v1.16.1</a> ·
   <a href="#快速开始">开始使用</a> ·
   <a href="#它怎么工作">协作流程</a> ·
   <a href="#能接入哪些客户端">客户端</a> ·
@@ -30,7 +30,7 @@ Claude Code、Codex、Qoder 各自能干活，拆任务、传上下文、核对�
 
 中心自托管，通过 Tailscale 连接其他电脑，无需公网 IP。执行端复用本机客户端及其登录态；DSH 等 harness 的模型、供应商与凭证由它自己的配置决定。
 
-> **当前版本：v1.12.0，仍处于早期。** Windows、Mac 原生包已发布并通过 CI 启动检查；多台真机与真实订阅的完整联调尚未完成。详见[验证状态](#现在做到哪了)。
+> **当前版本：v1.16.1，仍处于早期。** Windows、Mac 原生包已发布并通过 CI 启动检查；多台真机与真实订阅的完整联调尚未完成。详见[验证状态](#现在做到哪了)。
 
 <table>
   <tr>
@@ -49,6 +49,12 @@ Claude Code、Codex、Qoder 各自能干活，拆任务、传上下文、核对�
 
 ## 最近更新
 
+- **对话存储（v1.16.1）**：新长消息在节省空间时无损压缩，仍能搜索和读取全文；空间页区分实际用量与成果上传额度。
+- **历史找回（v1.15.0）**：按关键词搜索或翻阅较早的对话，个人频道与共享频道分别读取。
+
+- **自动记忆（v1.14.0）**：从对话和反馈中整理偏好与项目约定，支持检索、合并、编辑与删除。
+- **桌面协作与 Blender（v1.13.0）**：桌面成员可查询任务进度；Blender 已安装时可检查交付的 `.blend` 产物。
+
 - **任务看板（v1.12.0）**：按状态排列调度车道，以派工单展示任务、成员和授权状态，适配窄屏、深色模式与减少动效。
 
 - **桌面交接修复（v1.11.2）**：会话预检失败后可重试通知；补充消息确认后才能提交候选结果。升级后需重启交接 MCP 进程。
@@ -62,7 +68,7 @@ Claude Code、Codex、Qoder 各自能干活，拆任务、传上下文、核对�
 - **任务运行记录**：在任务详情里查看执行与独立验收日志，向前翻页加载历史，有新记录时提示刷新。
 - **原生包交付**：Windows x64、macOS ARM64 和 Mac 安装助手已发布；GitHub 负责构建、启动检查、哈希校验和附件上传。
 
-[查看 v1.12.0 发布说明](https://github.com/Jay1023CN/agent-cooperation/releases/tag/v1.12.0) · [完整更新记录](CHANGELOG.md)
+[查看 v1.16.1 发布说明](https://github.com/Jay1023CN/agent-cooperation/releases/tag/v1.16.1) · [完整更新记录](CHANGELOG.md)
 
 ## 快速开始
 
@@ -70,11 +76,11 @@ Claude Code、Codex、Qoder 各自能干活，拆任务、传上下文、核对�
 
 选一台常开的电脑运行中心，其他电脑作为执行端接入。原生包已包含 Python 和网页，运行时无需另装 Python 或 Node.js；代码任务需要 Git，各执行端还需要相应的客户端。
 
-| 电脑 / 用途 | v1.12.0 下载 |
+| 电脑 / 用途 | v1.16.1 下载 |
 | --- | --- |
-| Apple Silicon Mac mini 首次安装 | [Mac 安装助手](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.12.0/Mac-mini-Setup-v1.12.0.zip) |
-| Apple Silicon Mac 手动运行中心或 worker | [macOS ARM64 包](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.12.0/pal-arena-darwin-arm64-7d684775d3ac.tar.gz) · [SHA-256](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.12.0/pal-arena-darwin-arm64-7d684775d3ac.tar.gz.sha256) |
-| Intel / AMD Windows 电脑 | [Windows x64 包](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.12.0/pal-arena-windows-amd64-7d684775d3ac.zip) · [SHA-256](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.12.0/pal-arena-windows-amd64-7d684775d3ac.zip.sha256) |
+| Apple Silicon Mac mini 首次安装 | [Mac 安装助手](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.16.1/Mac-mini-Setup-v1.16.1.zip) |
+| Apple Silicon Mac 手动运行中心或 worker | [macOS ARM64 包](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.16.1/pal-arena-darwin-arm64-56987255605e.tar.gz) · [SHA-256](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.16.1/pal-arena-darwin-arm64-56987255605e.tar.gz.sha256) |
+| Intel / AMD Windows 电脑 | [Windows x64 包](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.16.1/pal-arena-windows-amd64-56987255605e.zip) · [SHA-256](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.16.1/pal-arena-windows-amd64-56987255605e.zip.sha256) |
 
 Mac 安装助手会下载并校验对应版本，配置当前用户登录时自动启动中心。手动安装时，按[交付指南](docs/arena-delivery.md#校验和解压)校验并完整解压，在包的最外层目录运行 `Start Server.command`（Mac）或 `Start Server.cmd`（Windows）。
 
@@ -234,9 +240,9 @@ py -3 -m venv .venv
 
 | 验证项 | 结果与证据 |
 | --- | --- |
-| GitHub 全量测试 | [1,454 项通过，6 项跳过](https://github.com/Jay1023CN/agent-cooperation/actions/runs/40815784580) |
-| 跨平台契约测试 | [Windows / Linux / macOS × Python 3.10 / 3.12，六组通过](https://github.com/Jay1023CN/agent-cooperation/actions/runs/40815784722) |
-| 原生包构建与启动 | [Windows、Mac 两端通过，校验后直接发布](https://github.com/Jay1023CN/agent-cooperation/actions/runs/40816030680) |
+| GitHub 全量测试 | [1,474 项通过，6 项跳过](https://github.com/Jay1023CN/agent-cooperation/actions/runs/40829652176) |
+| 跨平台契约测试 | [Windows / Linux / macOS × Python 3.10 / 3.12，六组通过](https://github.com/Jay1023CN/agent-cooperation/actions/runs/40829652149) |
+| 原生包构建与启动 | [Windows、Mac 两端通过，校验后直接发布](https://github.com/Jay1023CN/agent-cooperation/actions/runs/40829978033) |
 | 真实 Claude 桌面会话 | [已完成代码交接与独立验收](docs/desktop-handoff.md#真实桌面验证)；可选通知只支持已运行的会话 |
 
 自动化测试使用临时 Git 仓库、假 CLI 和协议夹具，不消耗真实订阅。DSH 真实模型、多机真实订阅的完整任务链路、WorkBuddy 桌面执行和 Blender 实际打开检查仍需实机联调。

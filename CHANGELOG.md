@@ -4,7 +4,7 @@
 
 ## v1.16.1 (2026-10-29)
 
-### Bug Fixes
+### 修复
 
 - 计算压缩预览占用确保节省空间
   ([`40f9e30`](https://github.com/Jay1023CN/agent-cooperation/commit/40f9e30f1186a63912ab8553f14753c7a7647f44))
@@ -12,7 +12,7 @@
 
 ## v1.16.0 (2026-10-29)
 
-### Features
+### 新增
 
 - 无损压缩长对话以节省存储
   ([`8fdea60`](https://github.com/Jay1023CN/agent-cooperation/commit/8fdea605cefcd5d1f07213a46a3f41b95aea4cbd))
@@ -20,7 +20,7 @@
 
 ## v1.15.0 (2026-10-29)
 
-### Features
+### 新增
 
 - 支持按需找回较早的对话
   ([`96d7fc8`](https://github.com/Jay1023CN/agent-cooperation/commit/96d7fc878d8f4460cbffea5c8a5ab04f340655d3))
@@ -28,7 +28,7 @@
 
 ## v1.14.0 (2026-10-29)
 
-### Features
+### 新增
 
 - 从日常对话自动整理长期记忆
   ([`addc318`](https://github.com/Jay1023CN/agent-cooperation/commit/addc3183c31e565bee84d23381d498c36168b556))
@@ -36,12 +36,12 @@
 
 ## v1.13.0 (2026-10-29)
 
-### Documentation
+### 文档
 
 - 更新 v1.12.0 下载与任务看板说明 [skip ci]
   ([`cee7a83`](https://github.com/Jay1023CN/agent-cooperation/commit/cee7a8302217f28b601202a5598a0b204424ef5a))
 
-### Features
+### 新增
 
 - 完善桌面任务协作与 Blender 产物检查
   ([`c714d35`](https://github.com/Jay1023CN/agent-cooperation/commit/c714d3544ad99488a6d0c410046846afc49480cb))
