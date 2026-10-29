@@ -1561,71 +1561,181 @@ kbd {
   color: var(--muted);
 }
 
-/* ---------- Task board ---------- */
+/* ---------- Task board ----------
+ * Four dispatch lanes. Each lane is a track tinted by its state, headed by a big condensed count;
+ * each task is a dispatch ticket: a coloured stub with the task number, torn along a perforation
+ * from the body that says what it is and who holds it. Live work is the only thing that moves. */
 .board {
   display: grid;
-  grid-template-columns: repeat(4, minmax(220px, 1fr));
-  gap: var(--space-4);
+  grid-template-columns: repeat(4, minmax(232px, 1fr));
+  gap: var(--space-3);
   overflow-x: auto;
   padding-bottom: var(--space-2);
 }
 .board-column {
+  --lane-bg: color-mix(in oklab, var(--state) 7%, var(--bg));
   display: grid;
   align-content: start;
   gap: var(--space-2);
   min-width: 0;
+  padding: 0 var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  background: var(--lane-bg);
+  box-shadow: inset 0 5px 0 var(--state);
 }
-.column-heading {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding-bottom: var(--space-2);
-  margin-bottom: var(--space-1);
-  border-bottom: 2px solid var(--state);
-  font-size: var(--text-sm);
-  font-weight: 700;
-}
-.column-heading span:last-child {
-  margin-left: auto;
-  color: var(--muted);
-  font-weight: 600;
-}
-.board-column .empty-small {
-  padding: var(--space-3) 0;
-  color: var(--faint);
-}
-.task-card {
+.lane-head {
   display: grid;
-  gap: 6px;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: end;
+  column-gap: 10px;
+  padding: var(--space-4) var(--space-2) var(--space-2);
+}
+.lane-count {
+  grid-row: span 2;
+  color: var(--state);
+  font-size: 52px;
+  font-weight: 800;
+  font-stretch: 62%;
+  letter-spacing: -0.03em;
+  line-height: 0.82;
+  font-variant-numeric: tabular-nums;
+}
+.lane-head.zero .lane-count {
+  color: var(--border-strong);
+}
+.lane-name {
+  font-size: var(--text-base);
+  font-weight: 750;
+  line-height: 1.2;
+}
+.lane-note {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lane-empty {
+  display: grid;
+  place-items: center;
+  min-height: 72px;
+  border: 1.5px dashed color-mix(in oklab, var(--state) 30%, var(--border));
+  border-radius: var(--radius-sm);
+  color: var(--faint);
+  font-size: var(--text-xs);
+}
+
+.task-card {
+  --stub: color-mix(in oklab, var(--state, var(--s-queued)) 16%, var(--surface));
+  position: relative;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
   width: 100%;
-  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
-  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface);
   text-align: left;
-  box-shadow: inset 3px 0 0 var(--state, var(--s-queued));
-  transition: border-color 0.12s;
+  box-shadow:
+    0 0 0 1px var(--border),
+    0 1px 0 1px light-dark(#14202e0d, #00000040);
+  transition:
+    box-shadow 0.15s,
+    transform 0.15s;
 }
 .task-card:hover {
-  border-color: var(--border-strong);
+  box-shadow:
+    0 0 0 1px var(--border-strong),
+    0 6px 18px -8px light-dark(#14202e40, #000000a0);
+  transform: translateY(-1px);
+}
+.task-card:focus-visible {
+  outline-offset: 3px;
+}
+/* The stub: task number set vertically, in the lane's colour. */
+.ticket-stub {
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  background: var(--stub);
+  border-right: 1.5px dashed color-mix(in oklab, var(--state, var(--s-queued)) 45%, var(--surface));
+}
+.ticket-stub code {
+  color: color-mix(in oklab, var(--state, var(--s-queued)) 80%, var(--text));
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 750;
+  font-stretch: 75%;
+  letter-spacing: 0.12em;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
+/* Perforation notches, cut in the lane's own colour. */
+.task-card::before,
+.task-card::after {
+  position: absolute;
+  left: 25px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--lane-bg, var(--bg));
+  content: '';
+}
+.task-card::before {
+  top: -5px;
+}
+.task-card::after {
+  bottom: -5px;
+}
+.task-card.status-running .ticket-stub,
+.task-card.status-coordinating .ticket-stub {
+  background:
+    repeating-linear-gradient(
+      -45deg,
+      transparent 0 6px,
+      color-mix(in oklab, var(--state) 22%, transparent) 6px 12px
+    ),
+    var(--stub);
+  background-size: 34px 34px;
+  animation: ticket-live 1.6s linear infinite;
+}
+@keyframes ticket-live {
+  to {
+    background-position: 0 34px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .task-card.status-running .ticket-stub,
+  .task-card.status-coordinating .ticket-stub {
+    animation: none;
+  }
+  .task-card:hover {
+    transform: none;
+  }
+}
+.ticket-body {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: var(--space-3) var(--space-3) var(--space-3) 14px;
 }
 .task-id {
   display: flex;
-  gap: var(--space-2);
-  color: var(--faint);
-  font-size: var(--text-xs);
-  font-weight: 600;
+  flex-wrap: wrap;
+  gap: 4px;
 }
-.task-id code {
-  font-family: var(--font-sans);
+.task-id span {
+  padding: 1px 7px;
+  border-radius: 4px;
+  background: var(--surface-subtle);
+  color: var(--muted);
   font-size: 11px;
-  font-weight: 700;
-  font-stretch: 80%;
-  letter-spacing: 0.06em;
+  font-weight: 650;
 }
 .task-card h3 {
-  font-size: var(--text-sm);
-  line-height: 1.45;
+  font-size: var(--text-base);
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  line-height: 1.35;
 }
 .task-card p {
   display: -webkit-box;
@@ -1642,17 +1752,63 @@ kbd {
   justify-content: space-between;
   gap: var(--space-2);
   margin-top: 4px;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
   color: var(--muted);
   font-size: var(--text-xs);
 }
-.task-card-bottom > span:first-child {
+.ticket-agent {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
   overflow: hidden;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.ticket-agent i {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+}
+.ticket-agent.unassigned {
+  color: var(--faint);
+}
+.ticket-agent.unassigned i {
+  border: 1.5px dashed var(--border-strong);
+  background: transparent;
+  color: var(--faint);
+}
 .task-flag {
-  color: var(--s-blocked);
-  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  flex: none;
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-weight: 750;
+  white-space: nowrap;
+}
+.task-card-bottom .pill {
+  flex: none;
+}
+.task-flag::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  content: '';
 }
 
 /* ---------- Review ---------- */
@@ -2852,7 +3008,7 @@ pre {
 }
 @media (max-width: 900px) {
   .board {
-    grid-template-columns: repeat(4, minmax(240px, 82vw));
+    grid-template-columns: repeat(4, minmax(248px, 82vw));
     scroll-snap-type: x mandatory;
   }
   .board-column {

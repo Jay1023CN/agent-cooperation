@@ -17,7 +17,8 @@ const kindLabels = { worker: '执行', leader: '负责人', reviewer: '验收', 
 
 function taskCard(task, state) {
   const waiting = asArray(task.permissions).some((item) => !item.decided) && task.status === 'running';
-  return `<button class="task-card status-${e(task.status)}" data-action="task" data-id="${e(task.id)}"><div class="task-id"><code>${e(task.id.slice(0, 7).toUpperCase())}</code><span>${e(capabilityLabels[task.capability] || task.capability)}</span>${task.kind !== 'worker' ? `<span>${e(kindLabels[task.kind] || task.kind)}</span>` : ''}</div><h3>${e(task.title)}</h3><p>${e(task.prompt)}</p><div class="task-card-bottom"><span>${e(state.agents.find((agent) => agent.id === task.agent_id)?.name || '等待分配')}</span>${waiting ? '<span class="task-flag">等你授权</span>' : status(task.status)}</div></button>`;
+  const agent = state.agents.find((item) => item.id === task.agent_id);
+  return `<button class="task-card status-${e(task.status)}" data-action="task" data-id="${e(task.id)}"><span class="ticket-stub"><code>${e(task.id.slice(0, 7).toUpperCase())}</code></span><span class="ticket-body"><span class="task-id"><span>${e(capabilityLabels[task.capability] || task.capability)}</span>${task.kind !== 'worker' ? `<span>${e(kindLabels[task.kind] || task.kind)}</span>` : ''}</span><h3>${e(task.title)}</h3><p>${e(task.prompt)}</p><span class="task-card-bottom"><span class="ticket-agent${agent ? '' : ' unassigned'}"><i aria-hidden="true">${agent ? e(Array.from(agent.name || '?')[0]) : ''}</i>${e(agent?.name || '等待分配')}</span>${waiting ? '<span class="task-flag">等你授权</span>' : status(task.status)}</span></span></button>`;
 }
 
 /** A running review belongs with the work it is reviewing, not with execution. */
@@ -37,18 +38,18 @@ export function renderTasks(state) {
   }
   const cancelled = state.tasks.length - tasks.length;
   const columns = [
-    ['queued', '待分派', ['queued']],
-    ['running', '执行中', ['running']],
-    ['in_review', '验收中', ['in_review']],
-    ['done', '结束', ['done', 'blocked']],
+    ['queued', '待分派', '等空闲成员领取', ['queued']],
+    ['running', '执行中', '成员正在做', ['running']],
+    ['in_review', '验收中', '另一位成员在核对', ['in_review']],
+    ['done', '结束', '通过验收，或停下等你处理', ['done', 'blocked']],
   ];
   $('#view-tasks').innerHTML =
     `<div class="view-heading"><div><h2>任务</h2><p>执行完不算完，另一位成员验收通过才进入已完成。${cancelled ? ` 已取消 ${cancelled} 个，未显示。` : ''}</p></div></div><div class="board">${columns
-      .map(([key, name, laneKeys]) => {
+      .map(([key, name, note, laneKeys]) => {
         const items = tasks
           .filter((task) => laneKeys.includes(boardLane(task)))
           .sort((a, b) => Number(laneOf(a.status) === 'done') - Number(laneOf(b.status) === 'done'));
-        return `<section class="board-column"><div class="column-heading status-${key}"><span>${name}</span><span>${items.length}</span></div>${items.map((task) => taskCard(task, state)).join('')}${!items.length ? '<p class="empty-small">空</p>' : ''}</section>`;
+        return `<section class="board-column status-${key}" aria-label="${name} ${items.length} 个"><header class="lane-head${items.length ? '' : ' zero'}"><strong class="lane-count">${items.length}</strong><span class="lane-name">${name}</span><span class="lane-note">${note}</span></header>${items.map((task) => taskCard(task, state)).join('')}${!items.length ? '<p class="lane-empty">没有任务</p>' : ''}</section>`;
       })
       .join('')}</div>`;
 }
