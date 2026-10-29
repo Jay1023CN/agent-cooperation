@@ -93,6 +93,7 @@ class Store:
         CREATE TABLE IF NOT EXISTS conversation_origins (
           task_id TEXT PRIMARY KEY, message_id TEXT NOT NULL, member_id TEXT NOT NULL);
         CREATE INDEX IF NOT EXISTS tasks_project ON tasks(project_id, created);
+        CREATE INDEX IF NOT EXISTS messages_history ON messages(project_id, channel, created, id);
         CREATE INDEX IF NOT EXISTS events_project ON events(project_id, id);
         """)
         if "channel" not in {row[1] for row in self.db.execute("PRAGMA table_info(tasks)")}:

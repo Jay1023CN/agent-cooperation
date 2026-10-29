@@ -1460,6 +1460,53 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
                 "memories": task.get("memory_snapshot", []),
             }
 
+    @app.get("/api/runs/history")
+    def run_history(
+        request: Request,
+        q: str = Query(default="", max_length=200),
+        before: str = Query(default="", max_length=100),
+        limit: int = Query(default=10, ge=1, le=20),
+    ):
+        with store.lock:
+            task, _ = run(request)
+            personal = task["channel"] if task["channel"] != "shared" else "shared"
+            params = [task["project_id"], "shared", personal]
+            where = "project_id=? AND channel IN (?,?)"
+            if before:
+                cursor = store.one("SELECT created,id FROM messages WHERE id=? AND " + where, (before, *params))
+                if cursor is None:
+                    raise HTTPException(404, "消息不存在")
+                where += " AND (created<? OR (created=? AND id<?))"
+                params.extend((cursor["created"], cursor["created"], cursor["id"]))
+            if q.strip():
+                where += " AND instr(lower(content),lower(?))>0"
+                params.append(q.strip())
+            rows = store.all(
+                "SELECT id,author,content,channel,created FROM messages WHERE "
+                + where
+                + " ORDER BY created DESC,id DESC LIMIT ?",
+                (*params, limit + 1),
+            )
+            messages = rows[:limit]
+            for message in messages:
+                message["truncated"] = len(message["content"]) > 4000
+                message["content"] = message["content"][:4000]
+            return {"messages": messages, "next_before": messages[-1]["id"] if len(rows) > limit else None}
+
+    @app.get("/api/runs/history/{message_id}")
+    def run_history_message(message_id: str, request: Request):
+        with store.lock:
+            task, _ = run(request)
+            personal = task["channel"] if task["channel"] != "shared" else "shared"
+            message = store.one(
+                "SELECT id,author,content,channel,created FROM messages "
+                "WHERE id=? AND project_id=? AND channel IN (?,?)",
+                (message_id, task["project_id"], "shared", personal),
+            )
+            if message is None:
+                raise HTTPException(404, "消息不存在")
+            return message
+
     @app.get("/api/runs/memories")
     def run_memories(request: Request, refresh: bool = False):
         with store.tx():

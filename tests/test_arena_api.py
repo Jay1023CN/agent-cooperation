@@ -725,6 +725,46 @@ def test_memory_search_and_consolidation_keep_old_entries_and_scope(arena):
     assert related["id"] not in {m["id"] for m in found}
 
 
+def test_agent_can_search_and_page_older_conversation_without_leaking_private_messages(arena):
+    client, store = arena
+    p = project(client)
+    owner = client.get("/api/me").json()["id"]
+    with store.tx():
+        for index in range(165):
+            content = "早期讨论：首页布局" if index == 0 else f"讨论记录 {index}"
+            if index == 2:
+                content = "长消息 " + "x" * 5000
+            store.db.execute(
+                "INSERT INTO messages VALUES(?,?,?,?,?,?)",
+                (f"history{index:03}", p["id"], "成员", content, "shared", index + 1),
+            )
+        store.db.execute(
+            "INSERT INTO messages VALUES(?,?,?,?,?,?)",
+            ("private", p["id"], "成员", "首页私人约定", f"personal:{owner}", 166),
+        )
+    client.post(f'/api/projects/{p["id"]}/messages', json={"content": "继续讨论"})
+    machine_auth, _ = machine(client, roles=["leader"])
+    _, auth = claim(client, machine_auth)
+    assert "history000" not in {
+        message["id"] for message in client.get("/api/runs/context", headers=auth).json()["messages"]
+    }
+    found = client.get("/api/runs/history", headers=auth, params={"q": "首页"}).json()["messages"]
+    assert [message["id"] for message in found] == ["history000"]
+    assert client.get("/api/runs/history/private", headers=auth).status_code == 404
+    first = client.get("/api/runs/history", headers=auth, params={"limit": 2}).json()
+    second = client.get("/api/runs/history", headers=auth, params={"limit": 2, "before": first["next_before"]}).json()
+    assert not {m["id"] for m in first["messages"]} & {m["id"] for m in second["messages"]}
+    long = client.get("/api/runs/history", headers=auth, params={"q": "长消息"}).json()["messages"][0]
+    assert long["truncated"] and len(long["content"]) == 4000
+    assert len(client.get("/api/runs/history/" + long["id"], headers=auth).json()["content"]) > 5000
+    assert client.get("/api/runs/history", headers=auth, params={"before": "private"}).status_code == 404
+    assert client.post("/api/runs/complete", headers=auth, json={"result": "收到"}).status_code == 200
+    client.post(f'/api/projects/{p["id"]}/messages', json={"content": "私人讨论", "channel": "personal"})
+    _, private_auth = claim(client, machine_auth)
+    private_results = client.get("/api/runs/history", headers=private_auth, params={"q": "首页"}).json()["messages"]
+    assert {message["id"] for message in private_results} == {"private", "history000"}
+
+
 def test_personal_conversation_automatically_saves_only_personal_memory(arena):
     client, _ = arena
     p = project(client)

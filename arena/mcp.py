@@ -19,6 +19,20 @@ def build_server(api: API):
         return api.request("GET", "/api/runs/context")
 
     @mcp.tool()
+    def history(query: str = "", before: str = "", limit: int = 10) -> dict:
+        """Find or page through older messages in this discussion, beyond the recent context window.
+
+        Search uses exact text. Pass next_before as before for older results. Long entries can be read in full
+        with history_message. Shared tasks cannot read personal channels.
+        """
+        return api.request("GET", "/api/runs/history?" + urlencode({"q": query, "before": before, "limit": limit}))
+
+    @mcp.tool()
+    def history_message(message_id: str) -> dict:
+        """Read a complete message returned by history, including entries whose preview was truncated."""
+        return api.request("GET", "/api/runs/history/" + safe_component(message_id))
+
+    @mcp.tool()
     def create_task(
         title: str,
         prompt: str,

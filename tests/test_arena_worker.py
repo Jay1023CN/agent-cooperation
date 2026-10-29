@@ -1222,6 +1222,24 @@ async def test_mcp_can_search_and_consolidate_memories():
     )
 
 
+@pytest.mark.asyncio
+async def test_mcp_can_search_and_open_older_conversation():
+    from arena.mcp import build_server
+
+    requests = []
+
+    class FakeAPI:
+        def request(self, method, path, body=None):
+            requests.append((method, path, body))
+            return {"messages": []}
+
+    server = build_server(FakeAPI())
+    await server.call_tool("history", {"query": "首页", "before": "previous", "limit": 4})
+    await server.call_tool("history_message", {"message_id": "history001"})
+    assert requests[0][0] == "GET" and "before=previous" in requests[0][1] and "limit=4" in requests[0][1]
+    assert requests[1] == ("GET", "/api/runs/history/history001", None)
+
+
 def test_leader_response_can_save_memory_without_mcp_tool_calls():
     from unittest.mock import Mock
 

@@ -46,6 +46,8 @@
 
 聊天记录、任务证据和长期记忆分别保存。无需把所有聊天都复制到长期记忆中，也不能靠记忆改变已验收提交或需求版本。
 
+较早的对话可以用 `history` 按原文关键词查找或向前翻页；预览过长时可用 `history_message` 读取原文。共享任务只能查看共享频道，个人会话可以查看共享频道和自己的个人频道。当前提供的是原文找回，并未自动把整段对话压缩为摘要。
+
 设计参考：[Codex 的单次会话提取](https://github.com/openai/codex/blob/main/codex-rs/memories/write/templates/memories/stage_one_system.md)、[Codex 的记忆整合](https://github.com/openai/codex/blob/main/codex-rs/memories/write/templates/memories/consolidation.md)和 [Deep Agents 的记忆加载](https://github.com/langchain-ai/deepagents/blob/main/libs/deepagents/deepagents/middleware/memory.py)。它们的实现方式不同，本项目使用现有数据库与客户端，不直接照搬文件结构。
 
 ## 代码如何保持一致
