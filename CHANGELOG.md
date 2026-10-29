@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.15.0 (2026-10-29)
+
+### Features
+
+- 支持按需找回较早的对话
+  ([`96d7fc8`](https://github.com/Jay1023CN/agent-cooperation/commit/96d7fc878d8f4460cbffea5c8a5ab04f340655d3))
+
+
 ## v1.14.0 (2026-10-29)
 
 ### Features
