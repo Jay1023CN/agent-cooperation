@@ -418,45 +418,51 @@ def _remove_tree(path):
 def apply_plan(root, proposed, status_provider, remote_verifier=None):
     """Revalidate an explicit plan under the worker's exclusive process lock before deletion."""
     root = _root(root)
+    with workspace_lock(root):
+        return apply_plan_locked(root, proposed, status_provider, remote_verifier)
+
+
+def apply_plan_locked(root, proposed, status_provider, remote_verifier=None):
+    """Apply a plan when the caller already holds workspace_lock for this root."""
+    root = _root(root)
     remote_verifier = remote_verifier or verify_remote
     if proposed.get("root") != str(root):
         raise CleanupError("清理计划不属于此工作区")
-    with workspace_lock(root):
-        current = plan(root, status_provider(inventory(root)), remote_verifier, keep=proposed.get("keep", 3))
-        expected = {(item["workspace"], item["commit"]) for item in proposed.get("candidates", [])}
-        removed, retained = [], []
-        for item in current["candidates"]:
-            if (item["workspace"], item["commit"]) not in expected:
-                continue
-            path = Path(item["workspace"])
-            try:
-                # Recheck local files after potentially slow network verification of other candidates.
-                status = status_provider([item])
-                rows = status.get("tasks", [])
-                confirmed = next(
-                    (row for row in rows if row.get("id") == item["task_id"] and row.get("attempt") == item["attempt"]),
-                    None,
-                )
-                _eligible(root, item, confirmed, remote_verifier)
-                receipt_path, receipt = _receipt(root, item)
-                receipt["workspace_cleanup"] = {
-                    "status": "started",
-                    "started_at": time.time(),
-                    "commit": item["commit"],
-                }
-                _save_receipt(receipt_path, receipt)
-                _remove_tree(path)
-                receipt["workspace_cleanup"].update(status="removed", completed_at=time.time())
-                _save_receipt(receipt_path, receipt)
-                removed.append(item)
-            except (CleanupError, OSError, ValueError):
-                retained.append({**item, "reason": "删除未完成确认；已保留执行回执，请检查实际目录"})
-        return {
-            **current,
-            "removed": removed,
-            "retained": retained,
-            "reclaimed_bytes": sum(i["bytes"] for i in removed),
-        }
+    current = plan(root, status_provider(inventory(root)), remote_verifier, keep=proposed.get("keep", 3))
+    expected = {(item["workspace"], item["commit"]) for item in proposed.get("candidates", [])}
+    removed, retained = [], []
+    for item in current["candidates"]:
+        if (item["workspace"], item["commit"]) not in expected:
+            continue
+        path = Path(item["workspace"])
+        try:
+            # Recheck local files after potentially slow network verification of other candidates.
+            status = status_provider([item])
+            rows = status.get("tasks", [])
+            confirmed = next(
+                (row for row in rows if row.get("id") == item["task_id"] and row.get("attempt") == item["attempt"]),
+                None,
+            )
+            _eligible(root, item, confirmed, remote_verifier)
+            receipt_path, receipt = _receipt(root, item)
+            receipt["workspace_cleanup"] = {
+                "status": "started",
+                "started_at": time.time(),
+                "commit": item["commit"],
+            }
+            _save_receipt(receipt_path, receipt)
+            _remove_tree(path)
+            receipt["workspace_cleanup"].update(status="removed", completed_at=time.time())
+            _save_receipt(receipt_path, receipt)
+            removed.append(item)
+        except (CleanupError, OSError, ValueError):
+            retained.append({**item, "reason": "删除未完成确认；已保留执行回执，请检查实际目录"})
+    return {
+        **current,
+        "removed": removed,
+        "retained": retained,
+        "reclaimed_bytes": sum(i["bytes"] for i in removed),
+    }
 
 
 def _token(path):

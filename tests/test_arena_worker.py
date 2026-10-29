@@ -14,6 +14,7 @@ import pytest
 
 from arena.worker import (
     API,
+    APIError,
     ArenaACP,
     RunCancelled,
     Worker,
@@ -1289,6 +1290,154 @@ def test_worker_cleanup_preview_runs_local_plan_and_strips_absolute_paths(tmp_pa
     )
     assert result_call.args[2]["candidates"][0]["bytes"] == 4096
     assert "workspace" not in result_call.args[2]["candidates"][0]
+
+
+@pytest.mark.parametrize("status_code", [404, 405])
+def test_worker_skips_cleanup_preview_when_connected_center_lacks_endpoint(tmp_path, status_code):
+    from unittest.mock import MagicMock
+
+    config = {"server": "http://localhost:8765", "workspace_root": str(tmp_path), "storage_limit_bytes": 5000}
+    worker = Worker(config, token="machine-secret")
+    worker.machine = MagicMock()
+    worker.machine.request.side_effect = APIError(status_code, "preview endpoint unavailable")
+    worker.poll_cleanup_preview()
+    worker.poll_cleanup_preview()
+    assert worker.cleanup_previews_supported is False
+    assert worker.machine.request.call_count == 1
+
+
+def test_worker_falls_back_to_legacy_storage_schema_only_on_explicit_422(tmp_path):
+    from unittest.mock import MagicMock
+
+    config = {
+        "server": "http://localhost:8765",
+        "workspace_root": str(tmp_path),
+        "storage_limit_bytes": 5000,
+        "name": "Worker",
+        "slots": 1,
+        "agents": [],
+    }
+    worker = Worker(config, token="machine-secret")
+    worker.machine = MagicMock()
+    bodies = []
+    responses = iter(
+        [
+            APIError(
+                422,
+                "body.storage_limit_bytes: Extra inputs are not permitted; "
+                "body.disk_total_bytes: Extra inputs are not permitted; "
+                "body.disk_free_bytes: Extra inputs are not permitted",
+            ),
+            {"machine_id": "machine", "agents": {}},
+            APIError(
+                422,
+                "body.storage_limit_bytes: Extra inputs are not permitted; "
+                "body.disk_total_bytes: Extra inputs are not permitted; "
+                "body.disk_free_bytes: Extra inputs are not permitted",
+            ),
+            {"status": "online"},
+            {"machine_id": "machine", "agents": {}},
+        ]
+    )
+
+    def request(_method, _path, body):
+        bodies.append(dict(body))
+        response = next(responses)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+    worker.machine.request.side_effect = request
+    with patch("arena.worker.github_accounts.verified_members", return_value=[]):
+        worker.register()
+        worker.legacy_storage_schema = False
+        worker.send_storage_heartbeat()
+        worker.register()
+    register_body, retry_register_body, _, retry_heartbeat_body, subsequent_register_body = bodies
+    assert "storage_limit_bytes" in register_body
+    assert all(
+        field not in retry_register_body for field in ("storage_limit_bytes", "disk_total_bytes", "disk_free_bytes")
+    )
+    assert set(retry_heartbeat_body) == {"storage_bytes"}
+    assert all(
+        field not in subsequent_register_body
+        for field in ("storage_limit_bytes", "disk_total_bytes", "disk_free_bytes")
+    )
+    assert worker.legacy_storage_schema is True
+
+
+def test_worker_does_not_retry_storage_write_after_network_error(tmp_path):
+    from unittest.mock import MagicMock
+
+    config = {
+        "server": "http://localhost:8765",
+        "workspace_root": str(tmp_path),
+        "storage_limit_bytes": 5000,
+        "name": "Worker",
+        "slots": 1,
+        "agents": [],
+    }
+    worker = Worker(config, token="machine-secret")
+    worker.machine = MagicMock()
+    worker.machine.request.side_effect = httpx.ConnectError("connection lost")
+    with pytest.raises(httpx.ConnectError), patch("arena.worker.github_accounts.verified_members", return_value=[]):
+        worker.register()
+    worker.machine.request.assert_called_once()
+    worker.machine.request.reset_mock()
+    worker.machine.request.side_effect = httpx.ConnectError("connection lost")
+    with pytest.raises(httpx.ConnectError):
+        worker.send_storage_heartbeat()
+    worker.machine.request.assert_called_once()
+
+
+def test_worker_apply_rechecks_and_limits_deletion_to_confirmed_commits(tmp_path):
+    from unittest.mock import MagicMock
+
+    config = {"server": "http://localhost:8765", "workspace_root": str(tmp_path), "storage_limit_bytes": 5000}
+    worker = Worker(config, token="machine-secret")
+    worker.machine = MagicMock()
+    worker.cleanup_preview_lock.acquire()
+    worker.cleanup_apply_active.set()
+    worker.cleanup_apply_done.clear()
+    confirmed = {"project_id": "project", "task_id": "task", "attempt": 2, "commit": "a" * 40}
+    candidates = [
+        {
+            **confirmed,
+            "workspace": str(tmp_path / "confirmed"),
+            "bytes": 2048,
+            "updated": 1,
+            "reason": "已验收并确认 GitHub 同步",
+        },
+        {
+            "project_id": "project",
+            "task_id": "task-other",
+            "attempt": 1,
+            "commit": "b" * 40,
+            "workspace": str(tmp_path / "unconfirmed"),
+            "bytes": 4096,
+            "updated": 1,
+            "reason": "已验收并确认 GitHub 同步",
+        },
+    ]
+    applied = {
+        "removed": [candidates[0]],
+        "retained": [],
+        "reclaimed_bytes": 2048,
+    }
+    with (
+        patch("arena.workspaces.inventory", return_value=[]),
+        patch("arena.workspaces.plan", return_value={"candidates": candidates}),
+        patch("arena.workspaces.apply_plan_locked", return_value=applied) as apply,
+    ):
+        worker._run_cleanup_apply({"id": "preview123", "keep": 3, "candidates": [confirmed]})
+    proposed = apply.call_args.args[1]
+    assert len(proposed["candidates"]) == 1
+    assert proposed["candidates"][0]["commit"] == confirmed["commit"]
+    assert apply.call_args.args[2] == worker._cleanup_statuses
+    result = worker.machine.request.call_args.args[2]
+    assert result["status"] == "complete" and result["reclaimed_bytes"] == 2048
+    assert "workspace" not in result["removed"][0]
+    assert worker.cleanup_apply_active.is_set() is False
 
 
 def test_worker_refuses_start_when_workspace_is_owned_by_another_process(tmp_path):

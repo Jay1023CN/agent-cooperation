@@ -304,6 +304,17 @@ def test_apply_rechecks_and_only_removes_previewed_candidates_preserving_receipt
     assert receipt["status"] == "complete_acknowledged"
     assert receipt["workspace_cleanup"]["status"] == "removed"
     assert receipt["workspace_cleanup"]["completed_at"] >= receipt["workspace_cleanup"]["started_at"]
+
+
+def test_apply_plan_locked_reuses_worker_held_workspace_lock(completed_workspaces):
+    root, statuses, records = completed_workspaces
+    proposed = preview(completed_workspaces)
+    with workspaces.workspace_lock(root):
+        result = workspaces.apply_plan_locked(root, proposed, lambda _items: statuses, remote_verifier=lambda *_: True)
+    assert [item["task_id"] for item in result["removed"]] == ["task-0"]
+    assert not records[0]["workspace"].exists()
+    receipt = json.loads(records[0]["receipt_path"].read_text(encoding="utf-8"))
+    assert receipt["workspace_cleanup"]["status"] == "removed"
     if os.name != "nt":
         assert stat.S_IMODE(records[0]["receipt_path"].stat().st_mode) == 0o600
 

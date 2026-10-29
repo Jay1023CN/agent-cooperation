@@ -929,13 +929,18 @@ def test_legacy_machine_heartbeat_keeps_capacity_unknown(arena):
 
 
 def test_workspace_cleanup_preview_requires_online_machine_and_returns_only_verified_report(arena):
-    client, _ = arena
+    client, store = arena
     auth, registered = machine(client)
+    p = project(client)
+    agent_id = next(iter(registered["agents"].values()))
+    with store.tx():
+        task = store.create_task(p["id"], "preview result", "preview result")
+        store.db.execute('UPDATE tasks SET agent_id=?,attempt=1,status="done" WHERE id=?', (agent_id, task["id"]))
     queued = client.post("/api/workspaces/cleanup-previews", json={"machine_id": registered["machine_id"], "keep": 2})
     assert queued.status_code == 202
     preview_id = queued.json()["id"]
     claimed = client.post("/api/machines/workspaces/cleanup-previews/poll", headers=auth, json={})
-    assert claimed.json() == {"id": preview_id, "keep": 2}
+    assert claimed.json() == {"id": preview_id, "action": "preview", "keep": 2}
     assert client.get(f"/api/workspaces/cleanup-previews/{preview_id}").json()["status"] == "running"
     completed = client.post(
         f"/api/machines/workspaces/cleanup-previews/{preview_id}/result",
@@ -944,11 +949,12 @@ def test_workspace_cleanup_preview_requires_online_machine_and_returns_only_veri
             "status": "complete",
             "candidates": [
                 {
-                    "project_id": "project",
-                    "task_id": "task",
+                    "project_id": p["id"],
+                    "task_id": task["id"],
                     "attempt": 1,
                     "bytes": 4096,
                     "reason": "已验收并确认 GitHub 同步",
+                    "commit": "a" * 40,
                 }
             ],
             "preserved": [],
@@ -962,7 +968,7 @@ def test_workspace_cleanup_preview_requires_online_machine_and_returns_only_veri
     assert report["status"] == "complete"
     assert report["result"]["reclaimable_bytes"] == 4096
     assert "workspace" not in report["result"]["candidates"][0]
-    assert "--apply" in report["next_step"]
+    assert "确认后" in report["next_step"]
 
 
 def test_workspace_cleanup_preview_expires_without_claiming(arena):
@@ -976,6 +982,120 @@ def test_workspace_cleanup_preview_expires_without_claiming(arena):
         )
     report = client.get(f"/api/workspaces/cleanup-previews/{queued.json()['id']}").json()
     assert report["status"] == "expired"
+
+
+def test_cleanup_preview_is_creator_only_and_filters_private_tasks(arena):
+    client, store = arena
+    auth, registered = machine(client)
+    p = project(client)
+    owner_id = store.authenticate(client.headers["Authorization"].split(" ", 1)[1])["id"]
+    agent_id = next(iter(registered["agents"].values()))
+    with store.tx():
+        task_ids = {}
+        for channel in ("shared", f"personal:{owner_id}", "personal:other-member"):
+            task = store.create_task(p["id"], "cleanup privacy", "privacy fixture", channel=channel)
+            store.db.execute('UPDATE tasks SET agent_id=?,attempt=1,status="done" WHERE id=?', (agent_id, task["id"]))
+            task_ids[channel] = task["id"]
+
+    queued = client.post("/api/workspaces/cleanup-previews", json={"machine_id": registered["machine_id"]})
+    preview_id = queued.json()["id"]
+    assert client.post("/api/machines/workspaces/cleanup-previews/poll", headers=auth, json={}).status_code == 200
+    entries = [
+        {
+            "project_id": p["id"],
+            "task_id": task_ids[channel],
+            "attempt": 1,
+            "bytes": size,
+            "reason": "已验收并确认 GitHub 同步",
+            "commit": f"{size:040x}",
+        }
+        for channel, size in (("shared", 100), (f"personal:{owner_id}", 200), ("personal:other-member", 999))
+    ]
+    submitted = client.post(
+        f"/api/machines/workspaces/cleanup-previews/{preview_id}/result",
+        headers=auth,
+        json={"status": "complete", "candidates": entries, "preserved": entries, "reclaimable_bytes": 1299},
+    )
+    assert submitted.status_code == 200
+    report = client.get(f"/api/workspaces/cleanup-previews/{preview_id}").json()
+    assert report["result"]["candidate_count"] == 2
+    assert report["result"]["preserved_count"] == 2
+    assert report["result"]["reclaimable_bytes"] == 300
+    visible_ids = {item["task_id"] for item in report["result"]["candidates"] + report["result"]["preserved"]}
+    assert task_ids["personal:other-member"] not in visible_ids
+
+    hidden_confirmation = client.post(
+        f"/api/workspaces/cleanup-previews/{preview_id}/apply",
+        json={
+            "candidates": [
+                {
+                    "project_id": p["id"],
+                    "task_id": task_ids["personal:other-member"],
+                    "attempt": 1,
+                    "commit": f"{999:040x}",
+                }
+            ]
+        },
+    )
+    assert hidden_confirmation.status_code == 409
+    confirmed = client.post(
+        f"/api/workspaces/cleanup-previews/{preview_id}/apply",
+        json={
+            "candidates": [
+                {key: item[key] for key in ("project_id", "task_id", "attempt", "commit")}
+                for item in report["result"]["candidates"]
+            ]
+        },
+    )
+    assert confirmed.status_code == 202
+    assert (
+        client.post("/api/machines/workspaces/cleanup-previews/poll", headers=auth, json={"idle": False}).json() is None
+    )
+    action = client.post("/api/machines/workspaces/cleanup-previews/poll", headers=auth, json={"idle": True}).json()
+    assert action["id"] == preview_id and action["action"] == "apply"
+    assert len(action["candidates"]) == 2
+    assert client.get(f"/api/workspaces/cleanup-previews/{preview_id}").json()["apply_status"] == "running"
+    with store.tx():
+        queued = store.create_task(p["id"], "must wait for cleanup", "active fixture")
+        store.db.execute("UPDATE tasks SET agent_id=? WHERE id=?", (agent_id, queued["id"]))
+        assert store.claim(registered["machine_id"]) is None
+    applied = client.post(
+        f"/api/machines/workspaces/cleanup-previews/{preview_id}/apply-result",
+        headers=auth,
+        json={
+            "status": "complete",
+            "removed": [report["result"]["candidates"][0]],
+            "retained": [],
+            "reclaimed_bytes": 100,
+        },
+    )
+    assert applied.status_code == 200
+    final = client.get(f"/api/workspaces/cleanup-previews/{preview_id}").json()
+    assert final["apply_status"] == "complete"
+    assert final["apply_result"]["reclaimed_bytes"] == 100
+
+    partner = client.post("/api/invites", json={"name": "Other member", "kind": "member"}).json()
+    hidden = client.get(
+        f"/api/workspaces/cleanup-previews/{preview_id}", headers={"Authorization": "Bearer " + partner["token"]}
+    )
+    assert hidden.status_code == 404
+
+
+def test_cleanup_preview_failure_text_is_server_sanitized(arena):
+    client, _ = arena
+    auth, registered = machine(client)
+    queued = client.post("/api/workspaces/cleanup-previews", json={"machine_id": registered["machine_id"]})
+    preview_id = queued.json()["id"]
+    client.post("/api/machines/workspaces/cleanup-previews/poll", headers=auth, json={})
+    completed = client.post(
+        f"/api/machines/workspaces/cleanup-previews/{preview_id}/result",
+        headers=auth,
+        json={"status": "failed", "error": "Bearer SECRET_TOKEN at C:\\private\\work"},
+    )
+    assert completed.status_code == 200
+    report = client.get(f"/api/workspaces/cleanup-previews/{preview_id}").json()
+    assert "SECRET_TOKEN" not in json.dumps(report)
+    assert "C:\\private" not in json.dumps(report)
 
 
 def test_database_page_limit_prevents_unbounded_growth(arena):

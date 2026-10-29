@@ -40,6 +40,7 @@ CLI_PROVIDERS = {"codex", "claude", "gemini"}
 PAL_PROVIDERS = set(Agents.names)
 MAX_OUTPUT = 1_000_000
 WORKSPACE_LOCK = threading.Lock()
+EXTENDED_STORAGE_FIELDS = ("storage_limit_bytes", "disk_total_bytes", "disk_free_bytes")
 
 
 class WorkerError(RuntimeError):
@@ -52,6 +53,20 @@ class APIError(WorkerError):
     def __init__(self, status_code, message):
         super().__init__(message, evidence={"execution_uncertain": True} if status_code >= 500 else None)
         self.status_code = status_code
+
+
+def legacy_storage_schema_rejection(error):
+    """Only recognize validation errors that explicitly reject every added storage field."""
+    if error.status_code != 422:
+        return False
+    message = str(error).lower().partition("; request was not retried")[0]
+    fragments = message.split(";")
+    extra_error = ("extra inputs are not permitted" in message) or ("extra fields not permitted" in message)
+    return (
+        extra_error
+        and len(fragments) == len(EXTENDED_STORAGE_FIELDS)
+        and all(sum(field in fragment for field in EXTENDED_STORAGE_FIELDS) == 1 for fragment in fragments)
+    )
 
 
 class AuthenticationError(APIError):
@@ -127,7 +142,11 @@ class API:
             elif isinstance(value, dict):
                 detail = str(value.get("message", ""))
             elif isinstance(value, list):
-                detail = "; ".join(str(item.get("msg", "")) for item in value if isinstance(item, dict))
+                detail = "; ".join(
+                    ".".join(str(part) for part in (item.get("loc") or [])) + ": " + str(item.get("msg", ""))
+                    for item in value
+                    if isinstance(item, dict)
+                )
         message = f"Arena returned HTTP {response.status_code}: {detail[:1000]}".replace(self.token, "[credential]")
         if response.status_code == 410:
             raise RunCancelled(message)
@@ -1549,6 +1568,11 @@ class Worker:
         self.active = {}
         self.active_lock = threading.Lock()
         self.cleanup_preview_lock = threading.Lock()
+        self.cleanup_apply_active = threading.Event()
+        self.cleanup_apply_done = threading.Event()
+        self.cleanup_apply_done.set()
+        self.cleanup_previews_supported = True
+        self.legacy_storage_schema = False
         self.desktop_locks = {}
         self.desktop_bridge = desktop_bridge
         self.last_registration = 0
@@ -1597,46 +1621,73 @@ class Worker:
             public["readiness"] = readiness
             public["enabled"] = agent.get("enabled", True) and readiness["dispatchable"]
             rows.append(public)
-        response = self.machine.request(
-            "POST",
-            "/api/machines/register",
-            {
-                "name": self.config["name"],
-                "os": platform.system(),
-                "slots": self.config["slots"],
-                "agents": rows,
-                **storage_metrics(self.root, self.config["storage_limit_bytes"]),
-                "github_members": self.github_members(),
-            },
-        )
+        body = {
+            "name": self.config["name"],
+            "os": platform.system(),
+            "slots": self.config["slots"],
+            "agents": rows,
+            **storage_metrics(self.root, self.config["storage_limit_bytes"]),
+            "github_members": self.github_members(),
+        }
+        if self.legacy_storage_schema:
+            for field in EXTENDED_STORAGE_FIELDS:
+                body.pop(field, None)
+        try:
+            response = self.machine.request("POST", "/api/machines/register", body)
+        except APIError as exc:
+            if self.legacy_storage_schema or not legacy_storage_schema_rejection(exc):
+                raise
+            self.legacy_storage_schema = True
+            for field in EXTENDED_STORAGE_FIELDS:
+                body.pop(field, None)
+            response = self.machine.request("POST", "/api/machines/register", body)
         self.machine_id = response["machine_id"]
         self.agent_map = {response["agents"][a["name"]]: a for a in self.config["agents"]}
         self.last_registration = time.monotonic()
 
+    def send_storage_heartbeat(self):
+        metrics = storage_metrics(self.root, self.config["storage_limit_bytes"])
+        if self.legacy_storage_schema:
+            metrics = {"storage_bytes": metrics["storage_bytes"]}
+        try:
+            return self.machine.request("POST", "/api/machines/heartbeat", metrics)
+        except APIError as exc:
+            if self.legacy_storage_schema or not legacy_storage_schema_rejection(exc):
+                raise
+            self.legacy_storage_schema = True
+            return self.machine.request("POST", "/api/machines/heartbeat", {"storage_bytes": metrics["storage_bytes"]})
+
     @staticmethod
     def _cleanup_preview_item(item):
-        return {
+        result = {
             "project_id": str(item.get("project_id", ""))[:80],
             "task_id": str(item.get("task_id", ""))[:80],
             "attempt": max(1, int(item.get("attempt", 1))),
             "bytes": max(0, int(item.get("bytes", 0))),
             "updated": float(item.get("updated", 0)),
             "reason": str(item.get("reason", "工作区检查未完成，已保留"))[:300],
+            "release": bool(item.get("release", False)),
         }
+        if item.get("commit"):
+            result["commit"] = str(item["commit"])[:64]
+        return result
+
+    def _cleanup_statuses(self, items):
+        tasks = []
+        for start in range(0, len(items), 100):
+            batch = [{"id": item["task_id"], "attempt": item["attempt"]} for item in items[start : start + 100]]
+            response = self.machine.request("POST", "/api/machines/workspaces/status", {"tasks": batch})
+            if not isinstance(response, dict) or not isinstance(response.get("tasks"), list):
+                raise WorkerError("中心未返回有效的任务状态；所有工作区均保留")
+            tasks.extend(response["tasks"])
+        return {"tasks": tasks}
 
     def _run_cleanup_preview(self, preview):
         from .workspaces import inventory, plan
 
         try:
             items = inventory(self.root)
-            tasks = []
-            for start in range(0, len(items), 100):
-                batch = [{"id": item["task_id"], "attempt": item["attempt"]} for item in items[start : start + 100]]
-                response = self.machine.request("POST", "/api/machines/workspaces/status", {"tasks": batch})
-                if not isinstance(response, dict) or not isinstance(response.get("tasks"), list):
-                    raise WorkerError("中心未返回有效的任务状态；所有工作区均保留")
-                tasks.extend(response["tasks"])
-            report = plan(self.root, {"tasks": tasks}, keep=preview["keep"])
+            report = plan(self.root, self._cleanup_statuses(items), keep=preview["keep"])
             result = {
                 "status": "complete",
                 "candidates": [self._cleanup_preview_item(item) for item in report["candidates"][:2000]],
@@ -1662,18 +1713,121 @@ class Worker:
         finally:
             self.cleanup_preview_lock.release()
 
-    def poll_cleanup_preview(self):
+    def _run_cleanup_apply(self, action):
+        from .workspaces import apply_plan_locked, inventory, plan
+
+        try:
+            items = inventory(self.root)
+            current = plan(self.root, self._cleanup_statuses(items), keep=action["keep"])
+            expected = {
+                (
+                    item["project_id"],
+                    item["task_id"],
+                    item["attempt"],
+                    item["commit"],
+                    item.get("release", False),
+                )
+                for item in action["candidates"]
+            }
+            matched = [
+                item
+                for item in current["candidates"]
+                if (
+                    item["project_id"],
+                    item["task_id"],
+                    item["attempt"],
+                    item["commit"],
+                    item.get("release", False),
+                )
+                in expected
+            ]
+            matched_keys = {
+                (
+                    item["project_id"],
+                    item["task_id"],
+                    item["attempt"],
+                    item["commit"],
+                    item.get("release", False),
+                )
+                for item in matched
+            }
+            proposed = {"root": str(self.root), "keep": action["keep"], "candidates": matched}
+            result = apply_plan_locked(self.root, proposed, self._cleanup_statuses)
+            retained = list(result["retained"])
+            for key in expected - matched_keys:
+                project_id, task_id, attempt, commit, release = key
+                retained.append(
+                    {
+                        "project_id": project_id,
+                        "task_id": task_id,
+                        "attempt": attempt,
+                        "commit": commit,
+                        "release": release,
+                        "bytes": 0,
+                        "updated": time.time(),
+                        "reason": "候选已变化或不再符合安全条件，未删除",
+                    }
+                )
+            report = {
+                "status": "complete",
+                "removed": [self._cleanup_preview_item(item) for item in result["removed"]],
+                "retained": [self._cleanup_preview_item(item) for item in retained],
+                "reclaimed_bytes": result["reclaimed_bytes"],
+            }
+        except Exception:
+            report = {
+                "status": "failed",
+                "removed": [],
+                "retained": [],
+                "reclaimed_bytes": 0,
+                "error": "执行端未能确认清理结果；请检查执行电脑上的工作区与回执。",
+            }
+        try:
+            self.machine.request(
+                "POST",
+                f"/api/machines/workspaces/cleanup-previews/{safe_component(action['id'])}/apply-result",
+                report,
+            )
+        finally:
+            self.cleanup_apply_active.clear()
+            self.cleanup_apply_done.set()
+            self.cleanup_preview_lock.release()
+
+    def poll_cleanup_preview(self, *, idle=False):
+        if not self.cleanup_previews_supported:
+            return
         if not self.cleanup_preview_lock.acquire(blocking=False):
             return
         try:
-            preview = self.machine.request("POST", "/api/machines/workspaces/cleanup-previews/poll", {})
+            preview = self.machine.request("POST", "/api/machines/workspaces/cleanup-previews/poll", {"idle": idle})
+        except APIError as exc:
+            self.cleanup_preview_lock.release()
+            if exc.status_code in (404, 405):
+                self.cleanup_previews_supported = False
+                return
+            raise
         except Exception:
             self.cleanup_preview_lock.release()
             raise
         if not preview:
             self.cleanup_preview_lock.release()
             return
-        threading.Thread(target=self._run_cleanup_preview, args=(preview,), daemon=True).start()
+        target = self._run_cleanup_preview
+        if preview.get("action") == "apply":
+            if not idle:
+                self.cleanup_preview_lock.release()
+                raise WorkerError("清理请求只能由空闲执行电脑领取")
+            self.cleanup_apply_active.set()
+            self.cleanup_apply_done.clear()
+            target = self._run_cleanup_apply
+        try:
+            threading.Thread(target=target, args=(preview,), daemon=True).start()
+        except BaseException:
+            if preview.get("action") == "apply":
+                self.cleanup_apply_active.clear()
+                self.cleanup_apply_done.set()
+            self.cleanup_preview_lock.release()
+            raise
 
     def run_one(self, job):
         api = API(self.config["server"], job["run_token"], self.config.get("allow_http", False))
@@ -2013,14 +2167,13 @@ class Worker:
                         try:
                             if time.monotonic() - self.last_registration >= 30:
                                 self.register()
-                            self.machine.request(
-                                "POST",
-                                "/api/machines/heartbeat",
-                                storage_metrics(self.root, self.config["storage_limit_bytes"]),
-                            )
-                            self.poll_cleanup_preview()
+                            self.send_storage_heartbeat()
                             futures = {f for f in futures if not f.done()}
-                            while len(futures) < self.config["slots"]:
+                            with self.active_lock:
+                                idle = not self.active and not futures
+                            if not once:
+                                self.poll_cleanup_preview(idle=idle)
+                            while not self.cleanup_apply_active.is_set() and len(futures) < self.config["slots"]:
                                 job = self.machine.request("POST", "/api/machines/claim", {})
                                 if not job:
                                     break
@@ -2040,6 +2193,7 @@ class Worker:
                     with self.active_lock:
                         for cancelled in self.active.values():
                             cancelled.set()
+                    self.cleanup_apply_done.wait()
         finally:
             self.machine.close()
 

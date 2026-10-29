@@ -75,7 +75,8 @@ class Store:
         CREATE TABLE IF NOT EXISTS workspace_cleanup_previews (
           id TEXT PRIMARY KEY, machine_id TEXT NOT NULL, requested_by TEXT NOT NULL,
           keep INTEGER NOT NULL, status TEXT NOT NULL, created REAL NOT NULL, updated REAL NOT NULL,
-          result TEXT NOT NULL DEFAULT '{}');
+          result TEXT NOT NULL DEFAULT '{}', apply_status TEXT NOT NULL DEFAULT '',
+          apply_expected TEXT NOT NULL DEFAULT '[]', apply_result TEXT NOT NULL DEFAULT '{}', apply_updated REAL);
         CREATE INDEX IF NOT EXISTS workspace_cleanup_pending ON workspace_cleanup_previews(status, created);
         CREATE TABLE IF NOT EXISTS agents (
           id TEXT PRIMARY KEY, machine_id TEXT NOT NULL, name TEXT NOT NULL, provider TEXT NOT NULL,
@@ -129,6 +130,12 @@ class Store:
                 "disk_total_bytes": "INTEGER",
                 "disk_free_bytes": "INTEGER",
                 "storage_measured": "REAL",
+            },
+            "workspace_cleanup_previews": {
+                "apply_status": "TEXT NOT NULL DEFAULT ''",
+                "apply_expected": "TEXT NOT NULL DEFAULT '[]'",
+                "apply_result": "TEXT NOT NULL DEFAULT '{}'",
+                "apply_updated": "REAL",
             },
             "agents": {"readiness": "TEXT NOT NULL DEFAULT '{}'", "routing_profile": "TEXT NOT NULL DEFAULT '{}'"},
             "tasks": {
@@ -750,6 +757,11 @@ class Store:
         machine = self.one("SELECT * FROM machines WHERE id=?", (machine_id,))
         if not machine or machine["seen"] < time.time() - 45:
             raise Conflict("先注册执行电脑")
+        if self.one(
+            "SELECT id FROM workspace_cleanup_previews WHERE machine_id=? AND apply_status='running' LIMIT 1",
+            (machine_id,),
+        ):
+            return None
         busy = self.one(
             "SELECT count(*) AS n FROM tasks t JOIN agents a ON a.id=t.agent_id "
             'WHERE a.machine_id=? AND t.status="running"',
