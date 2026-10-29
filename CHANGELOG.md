@@ -4,7 +4,7 @@
 
 ## v1.18.0 (2026-10-29)
 
-### Bug Fixes
+### 修复
 
 - 整合工作台界面与频道摘要
   ([`a0bd2a4`](https://github.com/Jay1023CN/agent-cooperation/commit/a0bd2a4be5c8a3e79d0104967c5703f937c8960b))
@@ -18,17 +18,17 @@
 - **worker**: 显示可操作的连接与任务失败原因
   ([`e2f982c`](https://github.com/Jay1023CN/agent-cooperation/commit/e2f982ccced4b6ee73b6b60dd88a576ffad20c65))
 
-### Continuous Integration
+### 发布与测试
 
 - 收紧发布前核心验证矩阵
   ([`8809396`](https://github.com/Jay1023CN/agent-cooperation/commit/88093968d40238cf3e4454244cefbfeebd367c3b))
 
-### Documentation
+### 文档
 
 - 更新 v1.17.0 下载和自动摘要说明 [skip ci]
   ([`dac645e`](https://github.com/Jay1023CN/agent-cooperation/commit/dac645e366bd090097a47febe2c7224d0d8299db))
 
-### Features
+### 新增
 
 - 接入记忆摘要与存储管理工作台
   ([`7ffb4c3`](https://github.com/Jay1023CN/agent-cooperation/commit/7ffb4c34ddc98e928fa9ed3041643ebf7adaa376))

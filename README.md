@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Jay1023CN/agent-cooperation/releases/tag/v1.17.0">下载 v1.17.0</a> ·
+  <a href="https://github.com/Jay1023CN/agent-cooperation/releases/tag/v1.18.0">下载 v1.18.0</a> ·
   <a href="#快速开始">开始使用</a> ·
   <a href="#它怎么工作">协作流程</a> ·
   <a href="#能接入哪些客户端">客户端</a> ·
@@ -30,7 +30,7 @@ Claude Code、Codex、Qoder 各自能干活，拆任务、传上下文、核对�
 
 中心自托管，通过 Tailscale 连接其他电脑，无需公网 IP。执行端复用本机客户端及其登录态；DSH 等 harness 的模型、供应商与凭证由它自己的配置决定。
 
-> **当前版本：v1.17.0，仍处于早期。** Windows、Mac 原生包已发布并通过 CI 启动检查；多台真机与真实订阅的完整联调尚未完成。详见[验证状态](#现在做到哪了)。
+> **当前版本：v1.18.0，仍处于早期。** Windows、Mac 原生包已发布并通过 CI 启动检查；多台真机与真实订阅的完整联调尚未完成。详见[验证状态](#现在做到哪了)。
 
 <table>
   <tr>
@@ -73,7 +73,7 @@ Claude Code、Codex、Qoder 各自能干活，拆任务、传上下文、核对�
 - **任务运行记录**：在任务详情里查看执行与独立验收日志，向前翻页加载历史，有新记录时提示刷新。
 - **原生包交付**：Windows x64、macOS ARM64 和 Mac 安装助手已发布；GitHub 负责构建、启动检查、哈希校验和附件上传。
 
-[查看 v1.17.0 发布说明](https://github.com/Jay1023CN/agent-cooperation/releases/tag/v1.17.0) · [完整更新记录](CHANGELOG.md)
+[查看 v1.18.0 发布说明](https://github.com/Jay1023CN/agent-cooperation/releases/tag/v1.18.0) · [完整更新记录](CHANGELOG.md)
 
 ## 快速开始
 
@@ -81,11 +81,11 @@ Claude Code、Codex、Qoder 各自能干活，拆任务、传上下文、核对�
 
 选一台常开的电脑运行中心，其他电脑作为执行端接入。原生包已包含 Python 和网页，运行时无需另装 Python 或 Node.js；代码任务需要 Git，各执行端还需要相应的客户端。
 
-| 电脑 / 用途 | v1.17.0 下载 |
+| 电脑 / 用途 | v1.18.0 下载 |
 | --- | --- |
-| Apple Silicon Mac mini 首次安装 | [Mac 安装助手](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.17.0/Mac-mini-Setup-v1.17.0.zip) |
-| Apple Silicon Mac 手动运行中心或 worker | [macOS ARM64 包](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.17.0/pal-arena-darwin-arm64-72516697890c.tar.gz) · [SHA-256](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.17.0/pal-arena-darwin-arm64-72516697890c.tar.gz.sha256) |
-| Intel / AMD Windows 电脑 | [Windows x64 包](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.17.0/pal-arena-windows-amd64-72516697890c.zip) · [SHA-256](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.17.0/pal-arena-windows-amd64-72516697890c.zip.sha256) |
+| Apple Silicon Mac mini 首次安装 | [Mac 安装助手](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.18.0/Mac-mini-Setup-v1.18.0.zip) |
+| Apple Silicon Mac 手动运行中心或 worker | [macOS ARM64 包](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.18.0/pal-arena-darwin-arm64-787f05ff42d4.tar.gz) · [SHA-256](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.18.0/pal-arena-darwin-arm64-787f05ff42d4.tar.gz.sha256) |
+| Intel / AMD Windows 电脑 | [Windows x64 包](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.18.0/pal-arena-windows-amd64-787f05ff42d4.zip) · [SHA-256](https://github.com/Jay1023CN/agent-cooperation/releases/download/v1.18.0/pal-arena-windows-amd64-787f05ff42d4.zip.sha256) |
 
 Mac 安装助手会下载并校验对应版本，配置当前用户登录时自动启动中心。手动安装时，按[交付指南](docs/arena-delivery.md#校验和解压)校验并完整解压，在包的最外层目录运行 `Start Server.command`（Mac）或 `Start Server.cmd`（Windows）。
 
