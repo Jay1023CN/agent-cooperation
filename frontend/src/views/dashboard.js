@@ -150,63 +150,207 @@ export function renderAttention(state) {
   return rows.length;
 }
 
-export function renderFleet(state) {
-  const online = state.machines.filter((machine) => machine.online).length;
-  $('#fleet-summary').innerHTML =
-    `<span class="online-dot ${online ? '' : 'offline'}"></span>${online} / ${state.machines.length} 台在线`;
-  $('#machine-list').innerHTML = state.machines.length
-    ? state.machines
-        .map((machine) => {
-          const agents = state.agents.filter((agent) => agent.machine_id === machine.id);
-          const slot = slots(machine, state);
-          return `<article class="machine-card ${machine.online ? '' : 'offline'}"><div class="machine-row"><span class="machine-icon">${icon('monitor')}</span><div class="machine-info"><strong>${e(machine.name)}</strong><small>${e(machine.os || '未知系统')} · ${machine.online ? '在线' : '离线'}</small></div><span class="online-dot ${machine.online ? '' : 'offline'}"></span></div><div class="machine-slots">${slot.html}<small>${slot.busy} / ${slot.total} 执行位</small></div>${agents.length ? `<div class="machine-agents">${agents.map((agent) => `<button class="pill" data-action="agent" data-id="${e(agent.id)}">${e(agent.name)}</button>`).join('')}</div>` : '<small class="muted">这台电脑还没有配置成员</small>'}${asArray(machine.github_members).length ? `<small class="muted">可代为提交：${e(machine.github_members.map((item) => item.github_login).join('、'))}</small>` : ''}</article>`;
-        })
-        .join('')
-    : '<div class="empty-small">还没有电脑接入。点「连接电脑」，给每台电脑生成令牌和配置，接入几台都可以。</div>';
+/**
+ * One member's dispatch state, from facts the center actually holds. Order matters: a stale
+ * readiness report from a computer that has since gone offline must not read as "ready".
+ * tone: ready | busy | wait | off | problem
+ */
+function memberState(agent, machine) {
+  const r = agent.readiness || {};
+  const probed = typeof r.installed === 'boolean';
+  if (!machine?.online) return { key: 'offline', label: '电脑离线', tone: 'off' };
+  if (!agent.enabled) return { key: 'disabled', label: '未启用', tone: 'off' };
+  if (!probed) return { key: 'unprobed', label: '待探测', tone: 'wait' };
+  if (r.installed === false) return { key: 'missing', label: '未找到客户端', tone: 'problem' };
+  if (r.transport_ready === false) return { key: 'transport', label: '连接不可用', tone: 'problem' };
+  if (agent.busy) return { key: 'busy', label: `执行中 ${agent.busy}`, tone: 'busy' };
+  if (r.dispatchable === true) return { key: 'ready', label: '就绪', tone: 'ready' };
+  return { key: 'blocked', label: '暂不可执行', tone: 'problem' };
 }
 
-function readinessLabel(agent, state) {
-  const online = state.machines.find((machine) => machine.id === agent.machine_id)?.online;
-  const readiness = agent.readiness || {};
-  if (!online) return '电脑离线';
-  if (agent.busy) return '执行中';
-  if (readiness.dispatchable === false) return readiness.installed === false ? '未找到客户端' : '暂不可执行';
-  if (!agent.enabled) return '未启用';
-  if (readiness.dispatchable === true) return '可领取';
-  return '待探测';
+const machineOf = (agent, state) => state.machines.find((machine) => machine.id === agent.machine_id);
+const providerLabel = (provider) => providerInfo[provider]?.label || provider || '未知客户端';
+const stateBadge = (status) =>
+  `<span class="member-state tone-${status.tone}"><span aria-hidden="true"></span>${e(status.label)}</span>`;
+
+function seenAgo(seconds) {
+  if (!seconds) return '';
+  const minutes = Math.round((Date.now() / 1000 - seconds) / 60);
+  if (minutes < 1) return '刚刚';
+  if (minutes < 60) return `${minutes} 分钟前`;
+  if (minutes < 60 * 24) return `${Math.round(minutes / 60)} 小时前`;
+  return `${Math.round(minutes / 1440)} 天前`;
+}
+
+/** The single next step for a computer, using actions the app already handles. */
+function machineNext(machine, members) {
+  if (!machine.online)
+    return {
+      text: `最后在线 ${seenAgo(machine.seen) || '时间未知'}。在那台电脑上重新运行 worker，它会自动回来。`,
+      action: '<button class="text-link" data-action="setup-help">查看启动命令</button>',
+    };
+  if (!members.length)
+    return {
+      text: '已连上中心，但 worker.json 里没有成员。',
+      action: '<button class="text-link" data-action="invite-machine">重新生成配置</button>',
+    };
+  const problem = members.find(({ status }) => status.tone === 'problem' || status.key === 'unprobed');
+  if (problem)
+    return {
+      text:
+        problem.status.key === 'unprobed'
+          ? '成员还没报告检测结果，worker 启动后会自动检测。'
+          : `${problem.agent.name}：${problem.status.label}。`,
+      action: `<button class="text-link" data-action="agent" data-id="${e(problem.agent.id)}">看原因</button>`,
+    };
+  if (members.every(({ status }) => status.key === 'disabled'))
+    return {
+      text: '成员都没有启用，在 worker.json 里打开 enabled 后重启 worker。',
+      action: '<button class="text-link" data-action="setup-help">接入指南</button>',
+    };
+  return null;
+}
+
+export function renderFleet(state) {
+  const machines = [...state.machines].sort(
+    (a, b) => Number(b.online) - Number(a.online) || String(a.name).localeCompare(String(b.name)),
+  );
+  const online = machines.filter((machine) => machine.online).length;
+  $('#fleet-summary').innerHTML =
+    `<span class="online-dot ${online ? '' : 'offline'}"></span>${online} / ${machines.length} 台在线`;
+  if (!machines.length) {
+    $('#machine-list').innerHTML =
+      '<div class="fleet-empty"><strong>还没有电脑接入</strong><p>先让其他电脑能访问到这里，再给每台电脑生成令牌和 worker.json。接几台都可以，在线的电脑会自动出现在这里。</p><div class="fleet-empty-actions"><button class="button primary small" data-action="invite-machine">连接电脑</button><button class="text-link" data-action="network-help">怎么组网</button></div></div>';
+    return;
+  }
+  $('#machine-list').innerHTML = machines
+    .map((machine) => {
+      const members = state.agents
+        .filter((agent) => agent.machine_id === machine.id)
+        .map((agent) => ({ agent, status: memberState(agent, machine) }));
+      const slot = slots(machine, state);
+      const free = Math.max(0, slot.total - slot.busy);
+      const headline = !machine.online
+        ? '离线'
+        : slot.busy
+          ? `在线，${slot.busy} 个执行位在用`
+          : `在线，${free} 个执行位空闲`;
+      const next = machineNext(machine, members);
+      const logins = asArray(machine.github_members).map((item) => item.github_login);
+      return `<article class="machine-card ${machine.online ? '' : 'offline'}"><header class="machine-head"><span class="online-dot ${machine.online ? '' : 'offline'}" aria-hidden="true"></span><div class="machine-title"><strong title="${e(machine.name)}">${e(machine.name)}</strong><span>${e(headline)}</span></div><span class="machine-os">${e(machine.os || '未知系统')}</span></header>${machine.online ? `<div class="machine-slots">${slot.html}<small>${slot.busy} / ${slot.total}</small></div>` : ''}${
+        members.length
+          ? `<ul class="machine-members">${members
+              .map(
+                ({ agent, status }) =>
+                  `<li><button class="machine-member" data-action="agent" data-id="${e(agent.id)}"><span class="machine-member-name">${e(agent.name)}</span>${stateBadge(status)}</button></li>`,
+              )
+              .join('')}</ul>`
+          : ''
+      }${next ? `<div class="machine-next"><span>${e(next.text)}</span>${next.action}</div>` : ''}${logins.length ? `<p class="machine-foot">可代为提交的 GitHub 账号：${e(logins.join('、'))}</p>` : ''}</article>`;
+    })
+    .join('');
 }
 
 export function renderAgents(state) {
-  const agents = state.agents;
-  $('#agent-count').textContent = `${agents.length} 个`;
-  $('#agent-list').innerHTML = agents.length
-    ? agents
-        .map((agent) => {
-          const machine = state.machines.find((item) => item.id === agent.machine_id);
-          return `<button class="agent-row agent-detail-button" data-action="agent" data-id="${e(agent.id)}"><span class="agent-icon">${e(agent.name.slice(0, 1).toUpperCase())}</span><span class="agent-info"><strong>${e(agent.name)}</strong><small>${e(
-            asArray(agent.roles)
-              .map((role) => roleLabels[role] || role)
-              .join(' / '),
-          )} · ${e(machine?.name || '未知电脑')} · ${e(agent.model || agent.provider)}</small></span><span class="agent-status ${agent.busy ? 'busy' : ''}">${e(readinessLabel(agent, state))}</span></button>`;
-        })
-        .join('')
-    : '<p class="empty-small">电脑接入后，它配置的 AI 成员会出现在这里。</p>';
+  const rows = state.agents.map((agent) => ({ agent, status: memberState(agent, machineOf(agent, state)) }));
+  const count = (...keys) => rows.filter(({ status }) => keys.includes(status.key)).length;
+  // Every member lands in exactly one bucket, so the four numbers always add up to the total.
+  const tally = [
+    ['ready', '就绪', count('ready')],
+    ['busy', '执行中', count('busy')],
+    ['problem', '需处理', count('unprobed', 'missing', 'transport', 'blocked')],
+    ['off', '离线或未启用', count('offline', 'disabled')],
+  ];
+  $('#agent-count').textContent = `共 ${rows.length} 个`;
+  if (!rows.length) {
+    $('#agent-list').innerHTML =
+      '<p class="empty-small agent-empty">成员写在每台电脑的 worker.json 里。电脑接入后，它配置的 AI 成员会出现在这里。</p>';
+    return;
+  }
+  $('#agent-list').innerHTML = `<div class="member-tally">${tally
+    .map(
+      ([tone, label, n]) =>
+        `<div class="tone-${tone} ${n ? '' : 'zero'}"><strong>${n}</strong><span>${label}</span></div>`,
+    )
+    .join('')}</div>${rows
+    .map(({ agent, status }) => {
+      const machine = machineOf(agent, state);
+      const roles = asArray(agent.roles)
+        .map((role) => roleLabels[role] || role)
+        .join(' / ');
+      return `<button class="agent-row agent-detail-button" data-action="agent" data-id="${e(agent.id)}"><span class="agent-icon" aria-hidden="true">${e(String(agent.name || '?').slice(0, 1).toUpperCase())}</span><span class="agent-info"><strong title="${e(agent.name)}">${e(agent.name)}</strong><small>${e(roles)}，在 ${e(machine?.name || '未知电脑')} 上，用 ${e(providerLabel(agent.provider))}</small></span>${stateBadge(status)}</button>`;
+    })
+    .join('')}`;
+}
+
+const difficultyLabels = { routine: '常规', standard: '标准', deep: '深入' };
+const quotaLabels = {
+  unknown: '未知',
+  available: '自行确认可用',
+  limited: '额度紧张',
+  exhausted: '已耗尽，暂停分派',
+};
+
+function preferenceRows(profile) {
+  const score = (value) =>
+    Number.isFinite(Number(value)) && value !== null && value !== ''
+      ? `<span class="score" aria-label="${Number(value)} 分，满分 5">${Array.from({ length: 5 }, (_, i) => `<span class="${i < Number(value) ? 'on' : ''}"></span>`).join('')}<b>${Number(value)}</b></span>`
+      : '未知';
+  const now = Date.now() / 1000;
+  const rows = [
+    ['质量', score(profile.quality)],
+    ['速度', score(profile.speed)],
+    ['性价比', score(profile.economy)],
+    ['最高承接难度', e(difficultyLabels[profile.max_difficulty] || '未知')],
+    ['上下文容量', profile.context_window ? `${Number(profile.context_window).toLocaleString('zh-CN')} tokens` : '未声明'],
+    ['额度声明', e(quotaLabels[profile.quota_state] || '未知')],
+  ];
+  if (profile.paused_until > now)
+    rows.push(['手动冷却', `到 ${e(new Date(profile.paused_until * 1000).toLocaleString('zh-CN'))}`]);
+  return rows.map(([label, value]) => `<div><dt>${label}</dt><dd>${value}</dd></div>`).join('');
 }
 
 export function openAgent(id, state, openModal) {
   const agent = state.agents.find((item) => item.id === id);
   if (!agent) return;
-  const machine = state.machines.find((item) => item.id === agent.machine_id);
+  const machine = machineOf(agent, state);
   const r = agent.readiness || {};
+  const status = memberState(agent, machine);
   const providerNote = providerInfo[agent.provider]?.note || '由执行电脑上的本地配置管理。';
+  // Three separate facts. "Detected" on an offline computer is only the last report, so it says so.
+  const stale = !machine?.online;
+  const fact = (ok, yes, no, unknown) =>
+    ok === true ? ['ok', yes] : ok === false ? ['bad', no] : ['unknown', unknown];
+  const facts = [
+    ['电脑', machine?.online ? ['ok', `${machine.name} 在线`] : ['bad', `${machine?.name || '未知电脑'} 离线`]],
+    [
+      '客户端',
+      stale && typeof r.installed === 'boolean'
+        ? ['unknown', `上次报告：${r.installed ? '检测到' : '未找到'}，电脑离线后无法确认`]
+        : fact(typeof r.installed === 'boolean' ? r.installed : null, `检测到 ${providerLabel(agent.provider)}`, '没有找到客户端', '还没检测'),
+    ],
+    [
+      '本地连接',
+      stale ? ['unknown', '电脑离线，无法确认'] : fact(r.transport_ready, '连接正常', '连接不可用', '还没检查'),
+    ],
+    ['成员', [status.tone === 'ready' || status.tone === 'busy' ? 'ok' : status.tone === 'problem' ? 'bad' : 'unknown', status.label]],
+  ];
+  const profile = agent.routing_profile || {};
   openModal(
     agent.name,
-    '连接状态与能力',
-    `<div class="detail-meta"><div>执行电脑<strong>${e(machine?.name || '未知')} · ${machine?.online ? '在线' : '离线'}</strong></div><div>配置<strong>${agent.enabled ? '已启用' : '未启用'} · ${e(agent.provider)}</strong></div><div>客户端<strong>${r.installed === true ? '已检测到' : r.installed === false ? '未找到' : '尚未检测'}</strong></div><div>本地连接<strong>${r.transport_ready === true ? '连接正常' : r.transport_ready === false ? '连接不可用' : '尚未检查'}</strong></div><div>模型<strong>${e(agent.model || '跟随客户端设置')}</strong></div><div>订阅与额度<strong>未验证，以实际运行为准</strong></div><div>会话<strong>${agent.mode === 'existing' ? '接续指定的桌面会话' : '每个任务新建会话'}</strong></div><div>能力<strong>${e(
+    `${asArray(agent.roles)
+      .map((role) => roleLabels[role] || role)
+      .join(' / ')}，${providerLabel(agent.provider)}`,
+    `<ol class="fact-chain">${facts
+      .map(
+        ([label, [tone, text]]) =>
+          `<li class="fact-${tone}"><span class="fact-mark" aria-hidden="true"></span><span class="fact-label">${label}</span><span class="fact-text">${e(text)}</span></li>`,
+      )
+      .join('')}</ol>${r.reason ? `<div class="notice">${e(r.reason)}</div>` : ''}<dl class="detail-meta member-meta"><div><dt>模型</dt><dd>${e(agent.model || '跟随客户端设置')}</dd></div><div><dt>会话</dt><dd>${agent.mode === 'existing' ? '接续指定的桌面会话' : '每个任务新建会话'}</dd></div><div><dt>能力</dt><dd>${e(
       asArray(agent.capabilities)
         .map((value) => capabilityLabels[value] || value)
-        .join('、') || '—',
-    )}</strong></div></div>${agent.routing_profile && Object.keys(agent.routing_profile).length ? `<div class="detail-section"><h3>调度偏好</h3><pre>${e(JSON.stringify(agent.routing_profile, null, 2))}</pre></div>` : ''}<div class="notice">${e(r.reason || providerNote)}</div><div class="detail-section"><h3>在这台电脑上自检</h3><pre>pal-arena doctor --config worker.json</pre></div><div class="modal-actions"><button class="button" type="button" data-action="setup-help">接入指南</button><button class="button primary" type="button" data-action="close-modal">关闭</button></div>`,
+        .join('、') || '未声明',
+    )}</dd></div><div><dt>订阅额度</dt><dd>平台不检测，以实际运行为准</dd></div></dl><div class="detail-section"><h3>调度偏好</h3><dl class="detail-meta member-meta">${preferenceRows(profile)}</dl><p class="muted small">这些是配置时填写的偏好声明，负责人结合任务难度和运行记录使用。</p></div>${r.reason ? '' : `<p class="muted small">${e(providerNote)}</p>`}<div class="detail-section"><h3>在这台电脑上自检</h3><pre>pal-arena doctor --config worker.json</pre></div><div class="modal-actions"><button class="button" type="button" data-action="setup-help">接入指南</button><button class="button primary" type="button" data-action="close-modal">关闭</button></div>`,
   );
 }
 
