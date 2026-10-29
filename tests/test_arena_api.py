@@ -579,6 +579,7 @@ def test_memory_approval_snapshot_refresh_and_personal_isolation(arena):
         ]
         == []
     )
+    assert client.get(f'/api/memories/{personal["id"]}/source', headers=partner_auth).status_code == 404
     assert (
         client.put(
             "/api/memories/" + personal["id"], headers=partner_auth, json={"status": "active", "expected_revision": 1}
@@ -674,6 +675,9 @@ def test_leader_automatically_remembers_and_updates_from_member_conversation(are
         },
     )
     assert changed.status_code == 201 and changed.json()["revision"] == 2
+    source = client.get(f'/api/memories/{memory["id"]}/source').json()
+    assert source["task"]["channel"] == "shared"
+    assert source["message"]["content"] == "颜色再克制一些"
     assert client.post("/api/runs/complete", headers=next_auth, json={"result": "收到"}).status_code == 200
     client.post(f'/api/projects/{p["id"]}/messages', json={"content": "继续聊", "channel": "personal"})
     _, private_auth = claim(client, machine_auth)
@@ -781,6 +785,8 @@ def test_conversation_summary_is_incremental_and_channel_scoped(arena):
     assert plan["revision"] == 0 and len(plan["messages"]) == 34
     assert all(row["id"].startswith("shared-") for row in plan["messages"])
     data = {"summary": "已决定先做首页，下一步检查布局", "through_id": plan["through_id"], "expected_revision": 0}
+    plan_response = client.get("/api/runs/conversation-summary", headers=auth)
+    assert plan_response.status_code == 200 and plan_response.json()["plan"]["through_id"] == plan["through_id"]
     assert client.post("/api/runs/conversation-summary", headers=auth, json=data).status_code == 200
     assert client.post("/api/runs/conversation-summary", headers=auth, json=data).status_code == 409
     assert client.get("/api/runs/history/" + plan["messages"][0]["id"], headers=auth).status_code == 200
@@ -824,6 +830,35 @@ def test_conversation_summary_is_incremental_and_channel_scoped(arena):
         },
     )
     assert updated.status_code == 200 and updated.json()["revision"] == 2
+    visible = client.get(f'/api/projects/{p["id"]}/conversation-summary').json()
+    assert visible["channel"] == "shared" and visible["summary"] == "已完成首页，继续检查移动端"
+    edited = client.put(
+        f'/api/projects/{p["id"]}/conversation-summary',
+        json={"summary": "修订后的共享摘要", "expected_revision": 2},
+    )
+    assert edited.status_code == 200 and edited.json()["revision"] == 3
+    assert edited.json()["through_id"] == next_plan["through_id"]
+    stale = client.put(
+        f'/api/projects/{p["id"]}/conversation-summary',
+        json={"summary": "过期修改", "expected_revision": 2},
+    )
+    assert stale.status_code == 409
+    private_visible = client.get(
+        f'/api/projects/{p["id"]}/conversation-summary', params={"channel": "personal"}
+    ).json()
+    assert private_visible["channel"] == f'personal:{owner}' and private_visible["summary"] == "私人偏好"
+    private_edit = client.put(
+        f'/api/projects/{p["id"]}/conversation-summary?channel=personal',
+        json={"summary": "修订后的私人摘要", "expected_revision": 1},
+    )
+    assert private_edit.status_code == 200 and private_edit.json()["revision"] == 2
+    partner = client.post("/api/invites", json={"name": "Partner", "kind": "member"}).json()
+    partner_personal = client.get(
+        f'/api/projects/{p["id"]}/conversation-summary',
+        headers={"Authorization": "Bearer " + partner["token"]},
+        params={"channel": "personal"},
+    ).json()
+    assert partner_personal["summary"] == "" and partner_personal["channel"] == f'personal:{partner["id"]}'
 
 
 def test_center_quota_blocks_new_work_and_keeps_existing_data(arena):

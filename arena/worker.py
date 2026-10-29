@@ -1122,6 +1122,7 @@ def task_prompt(job, *, desktop=False):
     context = job.get("context", {})
     data["recent_messages"], data["conversation_truncated"] = recent_conversation(context.get("messages", []))
     data["conversation_summaries"] = context.get("conversation_summaries", [])
+    data["conversation_compaction"] = context.get("compaction")
     data["project_tasks"] = [
         {
             "id": t.get("id"),
@@ -1154,6 +1155,8 @@ def task_prompt(job, *, desktop=False):
         "recent_messages 可能为控制上下文长度而省略较早对话；conversation_truncated 为 true 时，"
         "需要较早内容时用 history 按关键词或分页查找，长消息可用 history_message 读取全文，不要猜测缺失的约定。\n"
         "conversation_summaries 是先前对话的压缩摘要，当前用户要求和经核实的证据优先；需要细节时读取历史原文。\n"
+        "conversation_compaction 非空时表示有较早对话待整理。整理完后在最终 JSON 中附带 save_conversation_summary 操作，"
+        "使用计划给出的 through_id 和 revision；摘要保留目标、决定、进度、未解决问题和下一步，并区分完成与未验证。\n"
         "memory_snapshot 是领取任务时选出的有限、带版本的记忆，不代表全部历史。默认保持快照；需要更新时可调用 memories(refresh=true)。\n"
         "负责人在日常对话中自动识别值得以后沿用的偏好、背景、项目决定和约束，直接调用 remember 保存，无需用户手动填写。"
         "判断标准是以后遇到类似任务时这条信息是否会改变做法。主动从用户的选择、表扬、反感和纠正中识别偏好，"
@@ -1177,7 +1180,8 @@ def task_prompt(job, *, desktop=False):
         "允许的 action 还包括 update_requirements(requirements 数组，可带刚通过 context 读取的 expected_revision 防止覆盖伙伴更新)、"
         "report_review(decision 为 accept 或 changes_requested、summary、evidence 字符串数组)、"
         "finish_project(summary)、propose_memory(category,content)、remember(scope,category,content,memory_id,expected_revision)、"
-        "consolidate_memories(memories 为 id 和 revision 的数组,content,category)。"
+        "consolidate_memories(memories 为 id 和 revision 的数组,content,category)、"
+        "save_conversation_summary(summary,through_id,expected_revision)。"
         "当对话中识别出值得保存的偏好且无法调用 MCP 时，必须用 JSON 回退提交 remember，例如："
         '{"summary":"正常回复用户的话", "arena_actions":[{"action":"remember","scope":"project",'
         '"category":"preference","content":"界面偏好大胆"}]}。'
@@ -1214,6 +1218,7 @@ def relay_actions(result, api):
         "remember": "automatic-memory",
         "consolidate_memories": "memories/consolidate",
         "recover_task": "recover",
+        "save_conversation_summary": "conversation-summary",
     }
     for index, action in enumerate(actions):
         if not isinstance(action, dict) or action.get("action") not in routes:

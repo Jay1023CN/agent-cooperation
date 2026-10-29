@@ -342,6 +342,18 @@ class ConversationSummary(Input):
         return value.strip()
 
 
+class ConversationSummaryEdit(Input):
+    summary: str = Field(min_length=1, max_length=8000)
+    expected_revision: int = Field(ge=1)
+
+    @field_validator("summary")
+    @classmethod
+    def meaningful_summary(cls, value):
+        if not value.strip():
+            raise ValueError("对话摘要不能为空")
+        return value.strip()
+
+
 class Cleanup(Input):
     project_id: Short
     keep: int = Field(default=3, ge=0, le=100)
@@ -1077,6 +1089,89 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
                 )
             }
 
+    @app.get("/api/memories/{memory_id}/source")
+    def memory_source(memory_id: str, request: Request):
+        actor = identity(request)
+        with store.lock:
+            memory = memory_for_member(actor, memory_id)
+            task_id = memory.get("source_task")
+            if not task_id:
+                return {"memory_id": memory_id, "task": None, "message": None}
+            task = store.one("SELECT id,project_id,channel,title,status,created FROM tasks WHERE id=?", (task_id,))
+            if not task or task["channel"] not in ("shared", f'personal:{actor["id"]}'):
+                return {"memory_id": memory_id, "task": None, "message": None}
+            if memory["scope"] == "project" and (
+                task["project_id"] != memory["scope_id"] or task["channel"] != "shared"
+            ):
+                return {"memory_id": memory_id, "task": None, "message": None}
+            if memory["scope"] == "member" and task["channel"] != f'personal:{actor["id"]}':
+                return {"memory_id": memory_id, "task": None, "message": None}
+            origin = store.one(
+                "SELECT o.message_id,m.author,COALESCE(arena_message_text(p.payload),m.content) AS content,"
+                "m.channel,m.created FROM conversation_origins o JOIN messages m ON m.id=o.message_id "
+                "LEFT JOIN message_payloads p ON p.message_id=m.id WHERE o.task_id=? AND m.project_id=?",
+                (task_id, task["project_id"]),
+            )
+            return {
+                "memory_id": memory_id,
+                "task": task,
+                "message": origin if origin and origin["channel"] == task["channel"] else None,
+            }
+
+    @app.get("/api/projects/{project_id}/conversation-summary")
+    def conversation_summary_read(
+        project_id: str, request: Request, channel: Literal["shared", "personal"] = "shared"
+    ):
+        actor = identity(request)
+        with store.lock:
+            store.project(project_id)
+            scoped_channel = f'personal:{actor["id"]}' if channel == "personal" else "shared"
+            row = store.one(
+                "SELECT channel,summary,through_created,through_id,revision,updated FROM conversation_summaries "
+                "WHERE project_id=? AND channel=?",
+                (project_id, scoped_channel),
+            )
+            if row is None:
+                return {
+                    "channel": scoped_channel,
+                    "summary": "",
+                    "through_created": None,
+                    "through_id": None,
+                    "revision": 0,
+                    "updated": None,
+                }
+            return row
+
+    @app.put("/api/projects/{project_id}/conversation-summary")
+    def conversation_summary_edit(
+        project_id: str,
+        data: ConversationSummaryEdit,
+        request: Request,
+        channel: Literal["shared", "personal"] = "shared",
+    ):
+        actor = identity(request)
+        scoped_channel = f'personal:{actor["id"]}' if channel == "personal" else "shared"
+        with store.tx():
+            store.project(project_id)
+            current = store.one(
+                "SELECT revision FROM conversation_summaries WHERE project_id=? AND channel=?",
+                (project_id, scoped_channel),
+            )
+            if current is None:
+                raise HTTPException(404, "这段对话还没有可修改的摘要")
+            if current["revision"] != data.expected_revision:
+                raise Conflict("对话摘要已更新，请刷新后再修改")
+            store.db.execute(
+                "UPDATE conversation_summaries SET summary=?,revision=revision+1,updated=? "
+                "WHERE project_id=? AND channel=? AND revision=?",
+                (data.summary, time.time(), project_id, scoped_channel, data.expected_revision),
+            )
+            return store.one(
+                "SELECT channel,summary,through_created,through_id,revision,updated FROM conversation_summaries "
+                "WHERE project_id=? AND channel=?",
+                (project_id, scoped_channel),
+            )
+
     @app.post("/api/projects/{project_id}/memories", status_code=201)
     def memory_create(project_id: str, data: MemoryCreate, request: Request):
         with store.tx():
@@ -1516,6 +1611,16 @@ def create_app(root: str | Path, quota: int = 5_000_000_000) -> FastAPI:
                 ),
             )
             return {"revision": data.expected_revision + 1, "through_id": data.through_id}
+
+    @app.get("/api/runs/conversation-summary")
+    def run_conversation_summary_plan(request: Request):
+        with store.lock:
+            task, _ = run(request)
+            if task["kind"] != "leader" or not store.one(
+                "SELECT task_id FROM conversation_origins WHERE task_id=?", (task["id"],)
+            ):
+                raise Conflict("只有处理成员对话的负责人可以读取摘要整理计划")
+            return {"plan": store.conversation_compaction(task["project_id"], task["channel"])}
 
     @app.get("/api/runs/history")
     def run_history(

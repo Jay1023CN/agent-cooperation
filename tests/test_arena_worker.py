@@ -1243,6 +1243,22 @@ def test_memory_snapshot_prompt_preserves_precedence_and_version():
     assert "不代表全部历史" in prompt
 
 
+def test_existing_conversation_prompt_exposes_compaction_action():
+    from arena.worker import task_prompt
+
+    current = job()
+    current["context"] = {"messages": [], "conversation_summaries": []}
+    current["context"]["compaction"] = {
+        "summary": "旧摘要",
+        "revision": 3,
+        "through_id": "msg-9",
+        "messages": [{"id": "msg-10", "content": "新决定"}],
+    }
+    prompt = task_prompt(current)
+    assert '"through_id": "msg-9"' in prompt
+    assert "save_conversation_summary(summary,through_id,expected_revision)" in prompt
+
+
 def test_compaction_uses_configured_client_and_saves_only_successful_summary(tmp_path):
     from unittest.mock import Mock
 
@@ -1372,6 +1388,37 @@ def test_leader_response_can_save_memory_without_mcp_tool_calls():
     assert relay_actions(response, api) == "收到"
     api.request.assert_called_once_with(
         "POST", "/api/runs/automatic-memory", {"scope": "project", "category": "preference", "content": "界面风格大胆"}
+    )
+
+
+def test_existing_conversation_response_can_submit_summary():
+    from unittest.mock import Mock
+
+    api = Mock()
+    api.request.return_value = {"revision": 4, "through_id": "message-20"}
+    response = json.dumps(
+        {
+            "summary": "我已按你的决定更新方案。",
+            "arena_actions": [
+                {
+                    "action": "save_conversation_summary",
+                    "summary": "目标是完成方案；已决定保留现有桌面会话，下一步核对实现。",
+                    "through_id": "message-20",
+                    "expected_revision": 3,
+                }
+            ],
+        },
+        ensure_ascii=False,
+    )
+    assert relay_actions(response, api) == "我已按你的决定更新方案。"
+    api.request.assert_called_once_with(
+        "POST",
+        "/api/runs/conversation-summary",
+        {
+            "summary": "目标是完成方案；已决定保留现有桌面会话，下一步核对实现。",
+            "through_id": "message-20",
+            "expected_revision": 3,
+        },
     )
 
 
