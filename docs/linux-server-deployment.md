@@ -140,9 +140,8 @@ systemctl list-timers agent-cooperation-backup.timer
 上线前检查：
 
 ```bash
-curl -fsS http://127.0.0.1:8765/health
-systemctl is-active agent-cooperation
-systemctl is-active caddy
+chmod +x deploy/linux/check-center.sh
+./deploy/linux/check-center.sh
 ```
 
 公网只应能访问 HTTPS 域名；如果 `http://服务器IP:8765` 能访问，说明防火墙或监听配置过宽，应立即收紧。
