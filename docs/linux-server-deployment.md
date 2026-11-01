@@ -15,6 +15,17 @@ Linux 服务器可以独立运行 Agent Cooperation 中心。Mac 不需要常驻
 
 ## 安装中心
 
+仓库提供 Ubuntu 安装脚本。它只安装系统依赖、创建虚拟环境、安装项目并注册 systemd；不会生成或上传任何登录令牌：
+
+```bash
+git clone https://github.com/Jay1023CN/agent-cooperation.git /tmp/agent-cooperation
+cd /tmp/agent-cooperation
+chmod +x deploy/linux/install-center.sh
+./deploy/linux/install-center.sh
+```
+
+默认安装到 `/opt/agent-cooperation`。需要自定义目录时，可以在执行前设置 `ARENA_REPO_DIR`、`ARENA_DATA_DIR` 和 `ARENA_REPO_URL`。
+
 ```bash
 sudo apt update
 sudo apt install -y git python3 python3-venv python3-pip
@@ -110,7 +121,23 @@ chmod 600 ~/.pal-arena/machine-token.txt
 
 ## 备份和检查
 
-至少每天备份 `~/.pal-arena/server`，并把备份复制到另一台机器或对象存储。备份包含中心身份信息，必须限制权限。上线前检查：
+至少每天备份 `~/.pal-arena/server`，并把备份复制到另一台机器或对象存储。备份包含中心身份信息，必须限制权限。仓库提供每日备份模板：
+
+```bash
+sudo install -m 0644 deploy/linux/agent-cooperation-backup.service.example \
+  /etc/systemd/system/agent-cooperation-backup.service
+sudo install -m 0644 deploy/linux/agent-cooperation-backup.timer.example \
+  /etc/systemd/system/agent-cooperation-backup.timer
+sudo sed -i 's/ARENA_USER/你的Linux用户名/g' \
+  /etc/systemd/system/agent-cooperation-backup.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now agent-cooperation-backup.timer
+systemctl list-timers agent-cooperation-backup.timer
+```
+
+备份默认放在 `~/.pal-arena/backups`，保留 14 天。设置 `ARENA_BACKUP_DIR` 和 `ARENA_BACKUP_RETENTION_DAYS` 可调整位置和保留期；应再把备份复制到另一台机器或对象存储。
+
+上线前检查：
 
 ```bash
 curl -fsS http://127.0.0.1:8765/health
