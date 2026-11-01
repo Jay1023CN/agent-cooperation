@@ -1,0 +1,4 @@
+# Replace the hostname before installing this file as /etc/caddy/Caddyfile.
+cooperation.example.com {
+    reverse_proxy 127.0.0.1:8765
+}

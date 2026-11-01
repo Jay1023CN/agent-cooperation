@@ -271,6 +271,7 @@ docs/          说明文档
 | 想做什么 | 文档 |
 | --- | --- |
 | 安装、连接电脑、升级 | [安装与运行](docs/arena.md) · [交付与升级](docs/arena-delivery.md) · [Tailscale 组网](docs/network.md) |
+| Linux 公网服务器 | [Linux 服务器部署](docs/linux-server-deployment.md) |
 | 配置客户端与账号 | [DSH harness](docs/dsh-harness.md) · [Agent Link](docs/agent-link.md) · [GitHub 登录与推送](docs/github-login.md) |
 | 了解任务规则 | [产品规格](docs/arena-product.md) · [模型分配、记忆与代码交接](docs/arena-routing-memory.md) |
 | 维护、备份与恢复 | [维护文档](docs/arena-maintenance.md) · [跨电脑占用记录](docs/coordination.md) |

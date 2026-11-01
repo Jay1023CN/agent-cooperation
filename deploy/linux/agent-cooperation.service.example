@@ -1,0 +1,22 @@
+[Unit]
+Description=Agent Cooperation center
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ARENA_USER
+Group=ARENA_USER
+WorkingDirectory=/opt/agent-cooperation
+ExecStart=/opt/agent-cooperation/.venv/bin/pal-arena serve --data /home/ARENA_USER/.pal-arena/server --host 127.0.0.1 --port 8765 --quota-gb 20
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/home/ARENA_USER/.pal-arena/server
+
+[Install]
+WantedBy=multi-user.target
