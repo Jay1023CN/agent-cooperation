@@ -43,6 +43,12 @@ def main():
     config.add_argument("--server", default="http://127.0.0.1:8765")
     config.add_argument("--slots", type=int, default=2)
     config.add_argument("--output", help="Write UTF-8 JSON to a new file; refuses to overwrite existing settings")
+    setup = sub.add_parser("worker-setup", help="Create a worker config and install its machine token in one step")
+    setup.add_argument("--name", required=True)
+    setup.add_argument("--server", required=True)
+    setup.add_argument("--token-file", required=True, help="File containing the machine token from the center")
+    setup.add_argument("--output", default="~/.pal-arena/worker.json")
+    setup.add_argument("--slots", type=int, default=2)
     doctor = sub.add_parser("doctor", help="Check installation without submitting a model task")
     doctor.add_argument("--config", help="Worker JSON configuration to inspect")
     doctor.add_argument("--json", action="store_true", dest="json_output")
@@ -64,7 +70,7 @@ def main():
         if report["status"] == "error":
             raise SystemExit(1)
         return
-    if args.command == "worker-config":
+    if args.command in ("worker-config", "worker-setup"):
         value = {
             "name": args.name,
             "server": args.server,
@@ -98,6 +104,32 @@ def main():
             ],
         }
         serialized = json.dumps(value, ensure_ascii=False, indent=2)
+        if args.command == "worker-setup":
+            token_source = Path(args.token_file).expanduser()
+            token = token_source.read_text(encoding="utf-8").strip()
+            if not 20 <= len(token) <= 200 or any(char.isspace() for char in token):
+                parser.error("machine token file does not contain a valid token")
+            output = Path(args.output).expanduser()
+            token_target = output.parent / "machine-token.txt"
+            output.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                with output.open("x", encoding="utf-8") as config_file:
+                    config_file.write(serialized + "\n")
+                with token_target.open("x", encoding="utf-8") as token_file:
+                    token_file.write(token + "\n")
+            except OSError as exc:
+                parser.error(f"Cannot create worker files: {exc}")
+            try:
+                output.chmod(0o600)
+                token_target.chmod(0o600)
+            except OSError:
+                pass
+            print(f"Worker configured: {output}")
+            print(f"Token installed: {token_target}")
+            print("Start with: pal-arena maintenance run-service --role worker "
+                  f"--config '{output}' --token-file '{token_target}' "
+                  f"--log-file '{output.parent / 'worker.log'}'")
+            return
         if args.output:
             try:
                 with Path(args.output).expanduser().open("x", encoding="utf-8") as output:

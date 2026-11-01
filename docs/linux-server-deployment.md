@@ -107,6 +107,17 @@ sudo ufw status verbose
 
 令牌保存为本机用户目录下的单行文件，不要提交到 Git：
 
+如果执行端使用仓库源码或已安装 `pal-arena`，可以用一个命令同时生成配置并安全安装令牌：
+
+```bash
+pal-arena worker-setup \
+  --name '组员电脑' \
+  --server 'https://你的真实域名' \
+  --token-file ~/Downloads/machine-token.txt
+```
+
+它会在 `~/.pal-arena/` 创建 `worker.json` 和权限为 600 的 `machine-token.txt`，并打印下一条启动命令。Windows PowerShell 使用同样的参数格式，只需把路径改成 Windows 路径。
+
 ```bash
 chmod 600 ~/.pal-arena/machine-token.txt
 ./pal-arena/pal-arena doctor --config ~/.pal-arena/worker.json
