@@ -1,0 +1,7 @@
+[Unit]
+Description=Back up Agent Cooperation center data
+
+[Service]
+Type=oneshot
+User=ARENA_USER
+ExecStart=/opt/agent-cooperation/deploy/linux/backup-center.sh
