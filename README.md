@@ -77,6 +77,18 @@ Claude Code、Codex、Qoder 各自能干活，拆任务、传上下文、核对�
 
 ## 快速开始
 
+### Linux 服务器中心
+
+Linux 服务器可以独立运行中心，Mac 不需要常驻。Ubuntu 22.04/24.04 上执行：
+
+```bash
+git clone https://github.com/Jay1023CN/agent-cooperation.git /tmp/agent-cooperation
+cd /tmp/agent-cooperation
+./deploy/linux/install-center.sh
+```
+
+公网使用域名和 HTTPS 反向代理，详见 [Linux 服务器部署](docs/linux-server-deployment.md)。中心默认只监听 `127.0.0.1:8765`，不要直接开放 8765 端口。
+
 ### 1. 下载，启动中心
 
 选一台常开的电脑运行中心，其他电脑作为执行端接入。原生包已包含 Python 和网页，运行时无需另装 Python 或 Node.js；代码任务需要 Git，各执行端还需要相应的客户端。
@@ -128,6 +140,28 @@ $env:ARENA_MACHINE_TOKEN = '这台电脑的令牌'
 </details>
 
 `doctor` 不发送模型任务，检查通过也不代表账号或额度可用。先派一个小任务，核对结果、文件与独立验收，再增加成员和并发。令牌文件与后台运行方式见[工作机配置](docs/arena-delivery.md#安装检查和工作机)。
+
+### Windows / macOS 组员电脑
+
+组员电脑只需要下载对应的 Windows x64 或 macOS ARM64 原生包，不需要安装 Python 或 Node.js。首次从中心网页为电脑生成机器令牌并下载令牌文件，然后在解压后的包目录运行：
+
+```sh
+./pal-arena/pal-arena worker-setup \
+  --name '组员电脑' \
+  --server 'https://你的域名' \
+  --token-file ~/Downloads/machine-token.txt
+```
+
+Windows PowerShell 使用同样的参数，把路径改成 Windows 路径：
+
+```powershell
+.\pal-arena\pal-arena.exe worker-setup `
+  --name '组员电脑' `
+  --server 'https://你的域名' `
+  --token-file "$env:USERPROFILE\Downloads\machine-token.txt"
+```
+
+命令会在 `~/.pal-arena/`（Windows 为用户目录下的 `.pal-arena`）生成 `worker.json` 和机器令牌，并打印启动命令。电脑上还要安装并登录实际要使用的 Claude Code、Codex、Qoder 等客户端；中心服务器不提供这些客户端账号。
 
 <details>
 <summary>源码安装（Python 3.10+）</summary>
